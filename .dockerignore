@@ -1,0 +1,16 @@
+
+.git
+.gitignore
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.sqlite
+*.db
+.env
+.env.local
+.env.*.local
+*.txt
+!requirements.txt
+README.md

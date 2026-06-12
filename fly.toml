@@ -1,0 +1,12 @@
+
+# fly.toml file generated for telegram-bot
+app = "telegram-bot"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[mounts]
+  source = "telegram_bot_data"
+  destination = "/data"
+  initial_size = "1gb"
