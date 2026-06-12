@@ -251,8 +251,16 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
     email = context.user_data["register_email"]
     country_code = phone[1:4] if len(phone) >= 4 else phone[1:]
     db.create_user(update.effective_user.id, name, email, phone, country_code)
+    user = db.get_user_by_telegram_id(update.effective_user.id)
+    welcome_msg = (
+        f"👋 <b>Welcome, {html.escape(user['name'])}!</b>\n"
+        "❌ <b>No active subscription</b>\n\n"
+        "Tap a button below to continue."
+    )
     await update.message.reply_text(
-        "Registration complete! Use /subscribe to choose a subscription level."
+        welcome_msg,
+        reply_markup=get_user_menu_keyboard(update.effective_user.id),
+        parse_mode="HTML"
     )
     return ConversationHandler.END
 
