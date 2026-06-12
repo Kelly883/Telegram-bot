@@ -1,0 +1,9 @@
+DB path: C:\Users\PC\Downloads\TelegramBot\bot.sqlite
+DB exists: True
+Created plan id: 5
+Current subscription levels:
+{'id': 1, 'name': 'over2.5', 'price_ngn': 100000, 'price_usd': 0, 'description': '30 days subscription'}
+{'id': 2, 'name': 'over2.5', 'price_ngn': 100000, 'price_usd': 0, 'description': '30 days subscription'}
+{'id': 3, 'name': 'over2.5', 'price_ngn': 100000, 'price_usd': 0, 'description': '30 days subscription'}
+{'id': 4, 'name': 'over2.5', 'price_ngn': 100000, 'price_usd': 0, 'description': '30 days subscription'}
+{'id': 5, 'name': 'over2.5', 'price_ngn': 100000, 'price_usd': 0, 'description': '30 days subscription'}
