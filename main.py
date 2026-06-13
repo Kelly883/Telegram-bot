@@ -55,11 +55,16 @@ def ensure_user_exists(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def format_subscription(subscription):
     if not subscription:
-        return "You do not have an active subscription. Use /subscribe to buy a plan."
+        return (
+            "❌ <b>No Active Subscription</b>\n\n"
+            "You don't have an active subscription yet!\n\n"
+            "Tap 🏠 Back to Menu, then choose 💳 Buy Plan to get started!"
+        )
     return (
-        f"Subscription: {subscription['level_name']}\n"
-        f"Expires: {subscription['expiry_date']}\n"
-        f"Description: {subscription['description']}"
+        "📋 <b>Your Subscription</b>\n\n"
+        f"• <b>Plan:</b> {subscription['level_name']}\n"
+        f"• <b>Expires:</b> {subscription['expiry_date']}\n"
+        f"• <b>Details:</b> {subscription['description']}"
     )
 
 
@@ -81,13 +86,15 @@ def auto_verify_pending_payment(user_id: int):
 
 def get_welcome_menu(is_admin_user: bool = False) -> str:
     text = (
-        "👋 <b>Welcome to the Prediction Subscription Bot</b>\n\n"
-        "Subscribe once and receive premium predictions directly on Telegram.\n\n"
-        "Send your full name to register, then use the buttons to manage your plan.\n\n"
-        "<i>Fast setup • Auto verification • Simple payments</i>"
+        "🎉 <b>Welcome to PredictPro Bot!</b> 🎉\n\n"
+        "Get access to exclusive predictions with just a few taps!\n\n"
+        "• 🔄 Auto payment verification\n"
+        "• 📱 Instant access on Telegram\n"
+        "• 💎 Premium predictions\n\n"
+        "👇 Send your full name to start your registration journey!"
     )
     if is_admin_user:
-        text += "\n\n/admin - Open the admin control panel"
+        text += "\n\n<b>Admin Tip:</b> Use /admin to manage your bot!"
     return text
 
 
@@ -98,6 +105,7 @@ def get_user_menu_keyboard(telegram_user_id: int) -> InlineKeyboardMarkup:
          InlineKeyboardButton("💳 Buy Plan", callback_data="menu:subscribe")],
         [InlineKeyboardButton("🔮 View Predictions", callback_data="menu:predictions"),
          InlineKeyboardButton("🔄 Extend Plan", callback_data="menu:extend")],
+        [InlineKeyboardButton("❓ Help & Support", callback_data="menu:help")],
     ]
     if is_admin(telegram_user_id):
         keyboard.append([InlineKeyboardButton("⚙️ Admin Panel", callback_data="menu:admin")])
@@ -180,11 +188,28 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             await query.edit_message_text("You don't have admin access.")
     
+    elif action == "help":
+        help_text = (
+            "❓ <b>Need help?</b> No worries!\n\n"
+            "Here's what you can do:\n\n"
+            "1. 📋 <b>My Subscription</b> - Check your current subscription status\n"
+            "2. 💳 <b>Buy Plan</b> - Purchase a new subscription\n"
+            "3. 🔮 <b>View Predictions</b> - See premium predictions\n"
+            "4. 🔄 <b>Extend Plan</b> - Renew your subscription\n\n"
+            "Just tap the buttons to get started!"
+        )
+        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
+        await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+    
     elif action == "back":
         subscription = db.get_active_subscription(user["id"])
-        sub_text = f"✅ Active: {subscription['level_name']}" if subscription else "❌ No active subscription"
-        text = f"👋 Welcome back, {user['name']}!\n{sub_text}\n\nWhat would you like to do?"
-        await query.edit_message_text(text, reply_markup=get_user_menu_keyboard(user_id))
+        sub_text = f"✅ <b>Active:</b> {subscription['level_name']}" if subscription else "❌ <b>No active subscription</b>"
+        welcome_msg = (
+            f"👋 <b>Welcome back, {html.escape(user['name'])}!</b>\n"
+            f"{sub_text}\n\n"
+            "What would you like to do?"
+        )
+        await query.edit_message_text(welcome_msg, parse_mode="HTML", reply_markup=get_user_menu_keyboard(user_id))
 
 
 
@@ -324,10 +349,12 @@ async def subscribe_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ]
     
     await query.edit_message_text(
-        f"💳 Complete your payment:\n{payment_url}\n\n"
-        f"Your payment is checked automatically every few seconds.\n"
-        f"If needed, you can still tap \"Verify Payment\" as a fallback.\n\n"
-        f"⏱️ Auto-verification is active.",
+        f"💎 <b>Complete Your Payment</b>\n\n"
+        f"Pay here: {payment_url}\n\n"
+        f"✅ Payment auto-checking active\n"
+        f"⏱️ You'll get a notification once confirmed\n\n"
+        f"Tap \"Verify Payment\" if needed!",
+        parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -552,7 +579,11 @@ async def my_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Please register first with /start.")
         return
     subscription = db.get_active_subscription(user["id"])
-    await update.message.reply_text(format_subscription(subscription))
+    await update.message.reply_text(
+        format_subscription(subscription), 
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]])
+    )
 
 
 async def show_predictions(update: Update, context: ContextTypes.DEFAULT_TYPE):
