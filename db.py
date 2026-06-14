@@ -2,9 +2,11 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 import os
-import psycopg2
-from psycopg2.extras import RealDictCursor
 from config import USE_POSTGRES, DATABASE_URL, DB_PATH
+
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
 
 SQL_CREATE = [
     """
