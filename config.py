@@ -12,12 +12,14 @@ if env_path.exists():
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     print(f"DEBUG: Original DATABASE_URL = {repr(DATABASE_URL)}")  # Debug log
+    import re
+    # Extract the actual URL from any surrounding text/quotes/commands
+    url_match = re.search(r'(postgresql?://[^\s\'"]+)', DATABASE_URL)
+    if url_match:
+        DATABASE_URL = url_match.group(1)
     # Normalize Postgres connection schemes (handle case-insensitively)
     if DATABASE_URL.lower().startswith("psql://"):
         DATABASE_URL = "postgres://" + DATABASE_URL[len("psql://"):]
-    elif DATABASE_URL.lower().startswith("postgresql://"):
-        # psycopg2 accepts both postgres:// and postgresql://, so keep as-is
-        pass
     print(f"DEBUG: Processed DATABASE_URL = {repr(DATABASE_URL)}")  # Debug log
     USE_POSTGRES = True
     DB_PATH = BASE_DIR / "bot.sqlite"
