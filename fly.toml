@@ -23,3 +23,7 @@ internal_port = 8080
 auto_start_machines = true
 auto_stop_machines = false
 min_machines_running = 1
+
+[autoscaling]
+min_machines = 1
+max_machines = 1

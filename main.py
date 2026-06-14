@@ -5,6 +5,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import requests
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -20,6 +21,24 @@ from telegram.ext import (
 
 import config
 import db
+
+
+# Health check server to prevent Fly.io from stopping the app
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'OK')
+    
+    def log_message(self, format, *args):
+        pass  # Disable access logging
+
+
+def start_health_server():
+    server = HTTPServer(('0.0.0.0', 8080), HealthHandler)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
 
 (
     REG_NAME,
@@ -786,6 +805,8 @@ async def check_pending_payments(context: ContextTypes.DEFAULT_TYPE):
 
 
 def main():
+    # Start health check server first
+    start_health_server()
     db.init_db()
     application = Application.builder().token(config.BOT_TOKEN).build()
     registration = ConversationHandler(
