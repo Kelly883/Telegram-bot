@@ -232,7 +232,7 @@ def list_users():
         else:
             return conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
 
-def create_subscription_level(name: str, price_ngn: int, price_usd: int, description: str):
+def create_subscription_plan(name: str, price_ngn: int, price_usd: int, description: str):
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
@@ -251,7 +251,7 @@ def create_subscription_level(name: str, price_ngn: int, price_usd: int, descrip
             conn.commit()
             return cur.lastrowid
 
-def list_subscription_levels():
+def list_subscription_plans():
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
@@ -260,7 +260,7 @@ def list_subscription_levels():
         else:
             return conn.execute("SELECT * FROM subscription_levels ORDER BY id ASC").fetchall()
 
-def get_subscription_level(level_id: int):
+def get_subscription_plan(level_id: int):
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
@@ -332,7 +332,7 @@ def add_prediction(level_id: int, title: str, content: str):
             conn.commit()
             return cur.lastrowid
 
-def list_predictions_for_level(level_id: int):
+def list_predictions_for_plan(level_id: int):
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
@@ -438,3 +438,9 @@ def export_users_csv(path: str):
         for user in users:
             writer.writerow([user["telegram_id"], user["name"], user["email"], user["phone"], user["country_code"], user["created_at"]])
     return path
+
+# Backward compatible aliases
+create_subscription_level = create_subscription_plan
+list_subscription_levels = list_subscription_plans
+get_subscription_level = get_subscription_plan
+list_predictions_for_level = list_predictions_for_plan

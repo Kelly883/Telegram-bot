@@ -167,7 +167,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif action == "subscribe":
-        levels = db.list_subscription_levels()
+        levels = db.list_subscription_plans()
         if not levels:
             keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
             await query.edit_message_text(
@@ -198,7 +198,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
                 parse_mode="HTML"
             )
             return
-        predictions = db.list_predictions_for_level(subscription["level_id"])
+        predictions = db.list_predictions_for_plan(subscription["level_id"])
         if not predictions:
             keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
             await query.edit_message_text(
@@ -214,7 +214,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     
     elif action == "extend":
-        levels = db.list_subscription_levels()
+        levels = db.list_subscription_plans()
         if not levels:
             keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
             await query.edit_message_text(
@@ -368,7 +368,7 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Go to Main Menu", callback_data="menu:back")]])
         )
         return ConversationHandler.END
-    levels = db.list_subscription_levels()
+    levels = db.list_subscription_plans()
     if not levels:
         keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
         await update.message.reply_text(
@@ -396,7 +396,7 @@ async def subscribe_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     _, level_id = query.data.split(":")
-    level = db.get_subscription_level(int(level_id))
+    level = db.get_subscription_plan(int(level_id))
     user = db.get_user_by_telegram_id(query.from_user.id)
     if not level or not user:
         keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
@@ -569,7 +569,7 @@ def verify_gateway_payment(payment):
 
     try:
         # Get subscription level to validate amount
-        level = db.get_subscription_level(payment["level_id"])
+        level = db.get_subscription_plan(payment["level_id"])
         expected_amount = level["price_ngn"] if payment["currency"] == "NGN" else level["price_usd"]
         
         # Check 1: Amount Verification
@@ -689,7 +689,7 @@ async def show_predictions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not subscription:
         await update.message.reply_text("You do not have an active subscription. Use /subscribe to buy a plan.")
         return
-    predictions = db.list_predictions_for_level(subscription["level_id"])
+    predictions = db.list_predictions_for_plan(subscription["level_id"])
     if not predictions:
         await update.message.reply_text("No predictions yet for your subscription level.")
         return
@@ -722,7 +722,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Send the subscription level name.")
         return ADMIN_LEVEL_NAME
     if action == "upload_prediction":
-        levels = db.list_subscription_levels()
+        levels = db.list_subscription_plans()
         if not levels:
             await query.edit_message_text("No subscription levels defined. Create one first.")
             return ConversationHandler.END
@@ -774,7 +774,7 @@ async def admin_level_description(update: Update, context: ContextTypes.DEFAULT_
     price_ngn = context.user_data["admin_level_price_ngn"]
     price_usd = context.user_data["admin_level_price_usd"]
     description = update.message.text.strip()
-    db.create_subscription_level(name, price_ngn, price_usd, description)
+    db.create_subscription_plan(name, price_ngn, price_usd, description)
     await update.message.reply_text("Subscription level created successfully.")
     return ConversationHandler.END
 
@@ -846,7 +846,7 @@ def process_pending_payments(bot):
                 db.create_subscription(payment["user_id"], payment["level_id"], expiry_date)
 
                 user = db.get_user_by_id(payment["user_id"])
-                level = db.get_subscription_level(payment["level_id"])
+                level = db.get_subscription_plan(payment["level_id"])
                 try:
                     bot.send_message(
                         chat_id=user["telegram_id"],
