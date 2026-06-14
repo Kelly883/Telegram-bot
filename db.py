@@ -167,15 +167,14 @@ def get_connection():
         return conn
 
 def init_db():
-    if USE_POSTGRES:
-        with closing(get_connection()) as conn:
+    with closing(get_connection()) as conn:
+        if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
                 for stmt in SQL_CREATE_POSTGRES:
                     cur.execute(stmt)
             conn.commit()
-    else:
-        Path(DB_PATH.parent).mkdir(parents=True, exist_ok=True)
-        with closing(get_connection()) as conn:
+        else:
+            Path(DB_PATH.parent).mkdir(parents=True, exist_ok=True)
             for stmt in SQL_CREATE:
                 conn.execute(stmt)
             conn.commit()
@@ -190,18 +189,13 @@ def create_user(telegram_id: int, name: str, email: str, phone: str, country_cod
                 )
                 result = cur.fetchone()
                 conn.commit()
-                if result:
-                    return get_user_by_telegram_id(telegram_id)
-                return get_user_by_telegram_id(telegram_id)
         else:
             cur = conn.execute(
                 "INSERT OR IGNORE INTO users (telegram_id, name, email, phone, country_code) VALUES (?, ?, ?, ?, ?)",
                 (telegram_id, name.strip(), email.strip().lower(), phone.strip(), country_code.strip()),
             )
             conn.commit()
-            if cur.lastrowid:
-                return get_user_by_telegram_id(telegram_id)
-            return get_user_by_telegram_id(telegram_id)
+    return get_user_by_telegram_id(telegram_id)
 
 def get_user_by_telegram_id(telegram_id: int):
     with closing(get_connection()) as conn:
@@ -210,9 +204,7 @@ def get_user_by_telegram_id(telegram_id: int):
                 cur.execute("SELECT * FROM users WHERE telegram_id = %s", (telegram_id,))
                 return cur.fetchone()
         else:
-            return conn.execute(
-                "SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)
-            ).fetchone()
+            return conn.execute("SELECT * FROM users WHERE telegram_id = ?", (telegram_id,)).fetchone()
 
 def get_user_by_id(user_id: int):
     with closing(get_connection()) as conn:
@@ -221,9 +213,7 @@ def get_user_by_id(user_id: int):
                 cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
                 return cur.fetchone()
         else:
-            return conn.execute(
-                "SELECT * FROM users WHERE id = ?", (user_id,)
-            ).fetchone()
+            return conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 def list_users():
     with closing(get_connection()) as conn:
@@ -338,16 +328,10 @@ def list_predictions_for_plan(level_id: int):
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
-                cur.execute(
-                    "SELECT * FROM predictions WHERE level_id = %s ORDER BY created_at DESC",
-                    (level_id,),
-                )
+                cur.execute("SELECT * FROM predictions WHERE level_id = %s ORDER BY created_at DESC", (level_id,))
                 return cur.fetchall()
         else:
-            return conn.execute(
-                "SELECT * FROM predictions WHERE level_id = ? ORDER BY created_at DESC",
-                (level_id,),
-            ).fetchall()
+            return conn.execute("SELECT * FROM predictions WHERE level_id = ? ORDER BY created_at DESC", (level_id,)).fetchall()
 
 def record_payment(user_id: int, level_id: int, gateway: str, tx_ref: str, amount: float, currency: str, status: str):
     with closing(get_connection()) as conn:
@@ -410,9 +394,7 @@ def get_all_pending_payments():
                 cur.execute("SELECT * FROM payments WHERE status = 'PENDING' ORDER BY created_at ASC")
                 return cur.fetchall()
         else:
-            return conn.execute(
-                "SELECT * FROM payments WHERE status = 'PENDING' ORDER BY created_at ASC"
-            ).fetchall()
+            return conn.execute("SELECT * FROM payments WHERE status = 'PENDING' ORDER BY created_at ASC").fetchall()
 
 def log_verification_attempt(payment_id: int, tx_ref: str, status: str, gateway_response: str, amount_match: bool, timestamp_valid: bool, fraud_flags: list):
     flags_str = ",".join(fraud_flags) if fraud_flags else ""
