@@ -12,6 +12,7 @@ if env_path.exists():
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
     USE_POSTGRES = True
+    DB_PATH = BASE_DIR / "bot.sqlite"
 else:
     USE_POSTGRES = False
     # On Fly.io, use /data for SQLite; locally, use project directory
