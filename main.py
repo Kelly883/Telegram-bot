@@ -705,6 +705,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ Unauthorized. Only admins may use this command.")
         return
+    print(f"DEBUG: Admin command called by user {update.effective_user.id}")
     keyboard = [
         [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_level")],
         [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
@@ -724,7 +725,9 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    print(f"DEBUG: Admin callback received, data={repr(query.data)}")
     action = query.data.split(":", 1)[1]
+    print(f"DEBUG: Extracted action={repr(action)}")
     if action == "create_level":
         await query.edit_message_text(
             "💎 Let's create a new subscription plan!\n\n"
@@ -770,7 +773,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         return ConversationHandler.END
-    await query.edit_message_text("❌ Unknown admin action.")
+    await query.edit_message_text(f"❌ Unknown admin action: {repr(action)}")
     return ConversationHandler.END
 
 
