@@ -707,7 +707,7 @@ async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     print(f"DEBUG: Admin command called by user {update.effective_user.id}")
     keyboard = [
-        [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_level")],
+        [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_plan")],
         [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
         [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
         [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
@@ -728,7 +728,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(f"DEBUG: Admin callback received, data={repr(query.data)}")
     action = query.data.split(":", 1)[1]
     print(f"DEBUG: Extracted action={repr(action)}")
-    if action == "create_level":
+    if action == "create_plan" or action == "create_level":
         await query.edit_message_text(
             "💎 Let's create a new subscription plan!\n\n"
             "Please send the <b>plan name</b> (e.g., Gold Membership):",
@@ -782,7 +782,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "back":
         # Send back to admin panel
         keyboard = [
-            [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_level")],
+            [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_plan")],
             [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
             [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
             [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
