@@ -703,15 +703,22 @@ async def extend_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
-        await update.message.reply_text("Unauthorized. Only admins may use this command.")
+        await update.message.reply_text("⛔ Unauthorized. Only admins may use this command.")
         return
     keyboard = [
-        [InlineKeyboardButton("Create subscription level", callback_data="admin:create_level")],
-        [InlineKeyboardButton("Upload prediction", callback_data="admin:upload_prediction")],
-        [InlineKeyboardButton("View users", callback_data="admin:view_users")],
-        [InlineKeyboardButton("Download users CSV", callback_data="admin:download_users")],
+        [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_level")],
+        [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
+        [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
+        [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
     ]
-    await update.message.reply_text("Admin panel", reply_markup=InlineKeyboardMarkup(keyboard))
+    welcome_msg = (
+        "🔐 <b>Admin Control Panel</b>\n\n"
+        "Welcome to the admin dashboard! Use the buttons below to manage your bot.\n\n"
+        "• Create new subscription plans\n"
+        "• Upload predictions for subscribers\n"
+        "• View and download user data"
+    )
+    await update.message.reply_text(welcome_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
 
 
 async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -719,53 +726,92 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     action = query.data.split(":", 1)[1]
     if action == "create_level":
-        await query.edit_message_text("Send the subscription level name.")
+        await query.edit_message_text(
+            "💎 Let's create a new subscription plan!\n\n"
+            "Please send the <b>plan name</b> (e.g., Gold Membership):",
+            parse_mode="HTML"
+        )
         return ADMIN_LEVEL_NAME
     if action == "upload_prediction":
         levels = db.list_subscription_plans()
         if not levels:
-            await query.edit_message_text("No subscription levels defined. Create one first.")
+            await query.edit_message_text(
+                "❌ No subscription plans defined yet! Create a plan first using \"Create Subscription Plan\".",
+                parse_mode="HTML"
+            )
             return ConversationHandler.END
-        keyboard = [[InlineKeyboardButton(level["name"], callback_data=f"admin_level:{level['id']}")] for level in levels]
-        await query.edit_message_text("Choose a subscription level for the prediction:", reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard = [[InlineKeyboardButton(f"💎 {level['name']}", callback_data=f"admin_level:{level['id']}")] for level in levels]
+        await query.edit_message_text(
+            "📤 Upload a new prediction\n\n"
+            "Which subscription level should this prediction be for?",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         return ADMIN_CHOICE
     if action == "view_users":
         users = db.list_users()
-        lines = [f"{u['name']} | {u['email']} | {u['phone']}" for u in users]
-        message = "Users:\n" + ("\n".join(lines) if lines else "No users yet.")
-        await query.edit_message_text(message)
+        if users:
+            lines = [
+                f"👤 <b>{html.escape(u['name'])}</b>\n"
+                f"   📧 {u['email']}\n"
+                f"   📱 {u['phone']}\n"
+                f"   📅 Joined: {u['created_at']}\n"
+                for u in users
+            ]
+            message = "👥 <b>All Users</b>\n\n" + "\n".join(lines)
+        else:
+            message = "👥 <b>All Users</b>\n\nNo users yet!"
+        await query.edit_message_text(message, parse_mode="HTML")
         return ConversationHandler.END
     if action == "download_users":
         path = db.export_users_csv("users_export.csv")
-        await query.edit_message_text(f"Users exported to {path}")
+        await query.edit_message_text(
+            f"✅ Users exported successfully to <code>{path}</code>!",
+            parse_mode="HTML"
+        )
         return ConversationHandler.END
-    await query.edit_message_text("Unknown admin action.")
+    await query.edit_message_text("❌ Unknown admin action.")
     return ConversationHandler.END
 
 
 async def admin_level_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["admin_level_name"] = update.message.text.strip()
-    await update.message.reply_text("Send the NGN price for this level.")
+    await update.message.reply_text(
+        "Great! Now send the <b>price in NGN</b> (Nigerian Naira):",
+        parse_mode="HTML"
+    )
     return ADMIN_LEVEL_PRICE_NGN
 
 
 async def admin_level_price_ngn(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("Please send a valid numeric NGN price.")
+        await update.message.reply_text(
+            "❌ Please send a valid numeric price (only digits, no commas or currency symbols)!",
+            parse_mode="HTML"
+        )
         return ADMIN_LEVEL_PRICE_NGN
     context.user_data["admin_level_price_ngn"] = int(text)
-    await update.message.reply_text("Send the USD price for this level.")
+    await update.message.reply_text(
+        "Perfect! Now send the <b>price in USD</b> (US Dollars):",
+        parse_mode="HTML"
+    )
     return ADMIN_LEVEL_PRICE_USD
 
 
 async def admin_level_price_usd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if not text.isdigit():
-        await update.message.reply_text("Please send a valid numeric USD price.")
+        await update.message.reply_text(
+            "❌ Please send a valid numeric price (only digits, no commas or currency symbols)!",
+            parse_mode="HTML"
+        )
         return ADMIN_LEVEL_PRICE_USD
     context.user_data["admin_level_price_usd"] = int(text)
-    await update.message.reply_text("Send a short description for this level.")
+    await update.message.reply_text(
+        "Almost done! Send a <b>short description</b> for this subscription plan:",
+        parse_mode="HTML"
+    )
     return ADMIN_LEVEL_DESCRIPTION
 
 
@@ -775,7 +821,14 @@ async def admin_level_description(update: Update, context: ContextTypes.DEFAULT_
     price_usd = context.user_data["admin_level_price_usd"]
     description = update.message.text.strip()
     db.create_subscription_plan(name, price_ngn, price_usd, description)
-    await update.message.reply_text("Subscription level created successfully.")
+    await update.message.reply_text(
+        "✅ <b>Subscription Plan Created Successfully!</b>\n\n"
+        f"💎 Plan Name: {html.escape(name)}\n"
+        f"💰 NGN Price: {price_ngn}\n"
+        f"💰 USD Price: {price_usd}\n"
+        f"📝 Description: {html.escape(description)}",
+        parse_mode="HTML"
+    )
     return ConversationHandler.END
 
 
@@ -783,14 +836,22 @@ async def admin_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     _, level_id = query.data.split(":")
+    level = db.get_subscription_plan(int(level_id))
     context.user_data["admin_prediction_level_id"] = int(level_id)
-    await query.edit_message_text("Send the prediction title.")
+    await query.edit_message_text(
+        f"📤 Uploading prediction for <b>{html.escape(level['name'])}</b>\n\n"
+        "Please send the <b>prediction title</b>:",
+        parse_mode="HTML"
+    )
     return ADMIN_PREDICTION_TITLE
 
 
 async def admin_prediction_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["admin_prediction_title"] = update.message.text.strip()
-    await update.message.reply_text("Send the prediction content.")
+    await update.message.reply_text(
+        "Perfect! Now send the <b>full prediction content</b>:",
+        parse_mode="HTML"
+    )
     return ADMIN_PREDICTION_CONTENT
 
 
@@ -799,7 +860,14 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     content = update.message.text.strip()
     level_id = context.user_data["admin_prediction_level_id"]
     db.add_prediction(level_id, title, content)
-    await update.message.reply_text("Prediction saved. Notifying subscribed users...")
+    level = db.get_subscription_plan(level_id)
+    await update.message.reply_text(
+        "✅ <b>Prediction Saved Successfully!</b>\n\n"
+        f"💎 Plan: {html.escape(level['name'])}\n"
+        f"📌 Title: {html.escape(title)}\n"
+        f"Notifying subscribers now...",
+        parse_mode="HTML"
+    )
     notify_subscribers(level_id, title, content)
     return ConversationHandler.END
 
@@ -807,18 +875,33 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
 def notify_subscribers(level_id: int, title: str, content: str):
     subscription_users = []
     with db.get_connection() as conn:
-        rows = conn.execute(
-            "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
-            "WHERE s.level_id = ? AND s.active = 1",
-            (level_id,),
-        ).fetchall()
-        subscription_users = [row["telegram_id"] for row in rows]
-    text = f"New prediction for your subscription level:\n*{title}*\n{content}"
+        if hasattr(conn, 'cursor'):  # Postgres
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
+                    "WHERE s.level_id = %s AND s.active = 1",
+                    (level_id,),
+                )
+                rows = cur.fetchall()
+                subscription_users = [row["telegram_id"] for row in rows]
+        else:  # SQLite
+            rows = conn.execute(
+                "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
+                "WHERE s.level_id = ? AND s.active = 1",
+                (level_id,),
+            ).fetchall()
+            subscription_users = [row["telegram_id"] for row in rows]
+    
+    text = (
+        f"📢 <b>New Prediction Available!</b>\n\n"
+        f"📌 {html.escape(title)}\n\n"
+        f"{html.escape(content)}"
+    )
     from telegram import Bot
     bot = Bot(token=config.BOT_TOKEN)
     for telegram_id in subscription_users:
         try:
-            bot.send_message(chat_id=telegram_id, text=text, parse_mode="Markdown")
+            bot.send_message(chat_id=telegram_id, text=text, parse_mode="HTML")
         except Exception:
             continue
 
