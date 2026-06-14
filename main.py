@@ -738,12 +738,15 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if action == "upload_prediction":
         levels = db.list_subscription_plans()
         if not levels:
+            keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
             await query.edit_message_text(
                 "❌ No subscription plans defined yet! Create a plan first using \"Create Subscription Plan\".",
+                reply_markup=InlineKeyboardMarkup(keyboard),
                 parse_mode="HTML"
             )
             return ConversationHandler.END
         keyboard = [[InlineKeyboardButton(f"💎 {level['name']}", callback_data=f"admin_level:{level['id']}")] for level in levels]
+        keyboard.append([InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")])
         await query.edit_message_text(
             "📤 Upload a new prediction\n\n"
             "Which subscription level should this prediction be for?",
@@ -753,6 +756,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ADMIN_CHOICE
     if action == "view_users":
         users = db.list_users()
+        keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
         if users:
             lines = [
                 f"👤 <b>{html.escape(u['name'])}</b>\n"
@@ -764,16 +768,36 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message = "👥 <b>All Users</b>\n\n" + "\n".join(lines)
         else:
             message = "👥 <b>All Users</b>\n\nNo users yet!"
-        await query.edit_message_text(message, parse_mode="HTML")
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         return ConversationHandler.END
     if action == "download_users":
         path = db.export_users_csv("users_export.csv")
+        keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
         await query.edit_message_text(
             f"✅ Users exported successfully to <code>{path}</code>!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
         return ConversationHandler.END
-    await query.edit_message_text(f"❌ Unknown admin action: {repr(action)}")
+    if action == "back":
+        # Send back to admin panel
+        keyboard = [
+            [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_level")],
+            [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
+            [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
+            [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
+        ]
+        welcome_msg = (
+            "🔐 <b>Admin Control Panel</b>\n\n"
+            "Welcome to the admin dashboard! Use the buttons below to manage your bot.\n\n"
+            "• Create new subscription plans\n"
+            "• Upload predictions for subscribers\n"
+            "• View and download user data"
+        )
+        await query.edit_message_text(welcome_msg, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        return ConversationHandler.END
+    keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
+    await query.edit_message_text(f"❌ Unknown admin action: {repr(action)}", reply_markup=InlineKeyboardMarkup(keyboard))
     return ConversationHandler.END
 
 
@@ -991,6 +1015,7 @@ def main():
         allow_reentry=True,
     )
     application.add_handler(registration)
+    application.add_handler(admin_flow)
     application.add_handler(CommandHandler("menu", start))
     application.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
     application.add_handler(CommandHandler("subscribe", subscribe))
@@ -1000,7 +1025,6 @@ def main():
     application.add_handler(CommandHandler("my_subscription", my_subscription))
     application.add_handler(CommandHandler("predictions", show_predictions))
     application.add_handler(CommandHandler("extend", extend_subscription))
-    application.add_handler(admin_flow)
     application.add_handler(CommandHandler("cancel", cancel))
     
     # Schedule background payment verification every 2 seconds
