@@ -153,59 +153,100 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     user = db.get_user_by_telegram_id(user_id)
     
     if not user:
-        await query.edit_message_text("Please register first with /start.")
+        keyboard = [[InlineKeyboardButton("🏠 Go to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(
+            "⚠️ Please register first using /start!",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
         return
     
     if action == "my_sub":
         subscription = db.get_active_subscription(user["id"])
         text = format_subscription(subscription)
-        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif action == "subscribe":
         levels = db.list_subscription_levels()
         if not levels:
-            await query.edit_message_text("No subscription levels available yet.")
+            keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+            await query.edit_message_text(
+                "📭 No subscription plans available yet.\nPlease check back later!",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
             return
         keyboard = []
         for level in levels:
             price_text = format_price_for_user(level, user)
-            keyboard.append([InlineKeyboardButton(f"{level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")])
-        keyboard.append([InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")])
-        await query.edit_message_text("Choose a subscription level:", reply_markup=InlineKeyboardMarkup(keyboard))
+            keyboard.append([InlineKeyboardButton(f"💳 {level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")])
+        keyboard.append([InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")])
+        await query.edit_message_text(
+            "🎯 <b>Choose Your Subscription Plan</b>\n\nPick a plan that fits your needs!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
     
     elif action == "predictions":
         subscription = db.get_active_subscription(user["id"])
         if not subscription:
-            await query.edit_message_text("You don't have an active subscription to view predictions.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]))
+            keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back"),
+                         InlineKeyboardButton("💳 Buy a Plan", callback_data="menu:subscribe")]]
+            await query.edit_message_text(
+                "❌ You don't have an active subscription to view predictions!\n\nPlease purchase a plan first.",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
             return
         predictions = db.list_predictions_for_level(subscription["level_id"])
         if not predictions:
-            await query.edit_message_text("No predictions available for your subscription level.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]))
+            keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+            await query.edit_message_text(
+                "🔮 No predictions available for your subscription plan yet.\nCheck back soon!",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
             return
-        text = "🔮 Latest Predictions:\n\n"
-        for pred in predictions[:5]:
-            text += f"**{pred['title']}**\n{pred['content'][:100]}...\n\n"
-        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+        text = "🔮 <b>Latest Predictions</b>\n\n"
+        for pred in predictions[:10]:
+            text += f"📌 <b>{html.escape(pred['title'])}</b>\n{html.escape(pred['content'])}\n\n"
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     
     elif action == "extend":
         levels = db.list_subscription_levels()
         if not levels:
-            await query.edit_message_text("No subscription levels available yet.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]))
+            keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+            await query.edit_message_text(
+                "📭 No subscription plans available yet.\nPlease check back later!",
+                reply_markup=InlineKeyboardMarkup(keyboard),
+                parse_mode="HTML"
+            )
             return
         keyboard = []
         for level in levels:
             price_text = format_price_for_user(level, user)
-            keyboard.append([InlineKeyboardButton(f"{level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")])
-        keyboard.append([InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")])
-        await query.edit_message_text("To extend your subscription, purchase a new plan:", reply_markup=InlineKeyboardMarkup(keyboard))
+            keyboard.append([InlineKeyboardButton(f"💳 {level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")])
+        keyboard.append([InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")])
+        await query.edit_message_text(
+            "🔄 <b>Extend Your Subscription</b>\n\nChoose a plan to renew your subscription!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
     
     elif action == "admin":
         if is_admin(user_id):
-            await query.edit_message_text("⚙️ Admin Panel - Choose an action:", reply_markup=get_admin_menu_keyboard())
+            await query.edit_message_text(
+                "⚙️ <b>Admin Panel</b> - Choose an action:",
+                reply_markup=get_admin_menu_keyboard(),
+                parse_mode="HTML"
+            )
         else:
-            await query.edit_message_text("You don't have admin access.")
+            keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+            await query.edit_message_text(
+                "❌ You don't have admin access.",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
     
     elif action == "help":
         help_text = (
@@ -217,7 +258,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             "4. 🔄 <b>Extend Plan</b> - Renew your subscription\n\n"
             "Just tap the buttons to get started!"
         )
-        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
         await query.edit_message_text(help_text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     
     elif action == "back":
@@ -226,7 +267,7 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         welcome_msg = (
             f"👋 <b>Welcome back, {html.escape(user['name'])}!</b>\n"
             f"{sub_text}\n\n"
-            "What would you like to do?"
+            "What would you like to do today?"
         )
         await query.edit_message_text(welcome_msg, parse_mode="HTML", reply_markup=get_user_menu_keyboard(user_id))
 
@@ -322,26 +363,31 @@ def format_price_for_user(level: dict, user: dict) -> str:
 async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = db.get_user_by_telegram_id(update.effective_user.id)
     if not user:
-        await update.message.reply_text("Please start first with /start.")
+        await update.message.reply_text(
+            "⚠️ Please register first using /start to continue!",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Go to Main Menu", callback_data="menu:back")]])
+        )
         return ConversationHandler.END
     levels = db.list_subscription_levels()
     if not levels:
-        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
         await update.message.reply_text(
-            "No subscription levels exist yet. Please ask the admin to create one.",
+            "📭 No subscription plans available yet.\nPlease check back later or contact support!",
             reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
         )
         return ConversationHandler.END
     keyboard = []
     for level in levels:
         price_text = format_price_for_user(level, user)
         keyboard.append(
-            [InlineKeyboardButton(f"{level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")]
+            [InlineKeyboardButton(f"💳 {level['name']} - {price_text}", callback_data=f"subscribe:{level['id']}")]
         )
-    keyboard.append([InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")])
+    keyboard.append([InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")])
     await update.message.reply_text(
-        "Choose a subscription level:",
+        "🎯 <b>Choose Your Subscription Plan</b>\n\nPick a plan that fits your needs!",
         reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
     )
     return ConversationHandler.END
 
@@ -353,7 +399,12 @@ async def subscribe_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     level = db.get_subscription_level(int(level_id))
     user = db.get_user_by_telegram_id(query.from_user.id)
     if not level or not user:
-        await query.edit_message_text("Could not find the subscription level or your user profile.")
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(
+            "❌ Oops! Could not find the subscription plan or your profile.\nPlease try again later!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         return
     currency = "NGN" if user["country_code"].startswith("234") else "USD"
     amount = level["price_ngn"] if currency == "NGN" else level["price_usd"]
@@ -361,22 +412,27 @@ async def subscribe_callback(update: Update, context: ContextTypes.DEFAULT_TYPE)
     tx_ref = f"SUB-{uuid.uuid4().hex[:12]}"
     payment_url = create_payment_link(user, level, amount, currency, gateway, tx_ref)
     if not payment_url:
-        await query.edit_message_text("Failed to generate payment link. Please try again later.")
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(
+            "❌ Failed to generate payment link. Please try again later!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         return
     db.record_payment(user["id"], level["id"], gateway, tx_ref, amount, currency, "PENDING")
     
-    # Add verify button for easy payment confirmation
+    # Add verify button and back to menu button
     keyboard = [
         [InlineKeyboardButton("✅ Verify Payment", callback_data=f"verify_pay:{tx_ref}")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="menu:back")],
+        [InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")],
     ]
     
     await query.edit_message_text(
-        f"💎 <b>Complete Your Payment</b>\n\n"
-        f"Pay here: {payment_url}\n\n"
-        f"✅ Payment auto-checking active\n"
-        f"⏱️ You'll get a notification once confirmed\n\n"
-        f"Tap \"Verify Payment\" if needed!",
+        f"💎 <b>Complete Your Payment for {level['name']}</b>\n\n"
+        f"👉 Pay here: {payment_url}\n\n"
+        f"✅ Payment auto-checking is active\n"
+        f"⏱️ You'll get a notification once your payment is confirmed!\n\n"
+        f"Tap \"Verify Payment\" if you need to check manually!",
         parse_mode="HTML",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
@@ -445,19 +501,32 @@ async def verify_payment_callback(update: Update, context: ContextTypes.DEFAULT_
     payment = db.get_payment_by_ref(tx_ref)
     
     if not payment:
-        await query.edit_message_text("❌ Payment record not found.")
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(
+            "❌ Payment record not found.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         return
     
     if payment["status"] == "CONFIRMED":
-        await query.edit_message_text("✅ This payment has already been confirmed and your subscription is active!")
+        keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
+        await query.edit_message_text(
+            "✅ This payment has already been confirmed and your subscription is active!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
         return
     
     # Attempt to verify payment
-    await query.edit_message_text("⏳ Verifying payment with payment gateway...")
+    await query.edit_message_text("⏳ Verifying payment with payment gateway...", parse_mode="HTML")
     
     verification = verify_gateway_payment(payment)
     if not verification:
-        keyboard = [[InlineKeyboardButton("🔄 Try Again", callback_data=f"verify_pay:{tx_ref}")]]
+        keyboard = [
+            [InlineKeyboardButton("🔄 Try Again", callback_data=f"verify_pay:{tx_ref}")],
+            [InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]
+        ]
         await query.edit_message_text(
             "❌ Payment not confirmed yet.\n\n"
             "This might be because:\n"
@@ -465,7 +534,8 @@ async def verify_payment_callback(update: Update, context: ContextTypes.DEFAULT_
             "• Payment amount doesn't match\n"
             "• Email mismatch\n\n"
             "Try again in a moment or check with your payment provider.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
         )
         return
     
@@ -474,11 +544,12 @@ async def verify_payment_callback(update: Update, context: ContextTypes.DEFAULT_
     expiry_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
     db.create_subscription(payment["user_id"], payment["level_id"], expiry_date)
     
-    keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
+    keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
     await query.edit_message_text(
         "✅ Payment confirmed!\n\n"
         "Your subscription is now active. You'll receive notifications about new predictions.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
     )
 
 
