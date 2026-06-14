@@ -307,7 +307,11 @@ async def subscribe(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     levels = db.list_subscription_levels()
     if not levels:
-        await update.message.reply_text("No subscription levels exist yet. Please ask the admin to create one.")
+        keyboard = [[InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")]]
+        await update.message.reply_text(
+            "No subscription levels exist yet. Please ask the admin to create one.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+        )
         return ConversationHandler.END
     keyboard = []
     for level in levels:

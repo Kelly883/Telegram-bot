@@ -1,11 +1,28 @@
 import os
 from pathlib import Path
+from dotenv import load_dotenv
 
+# Load variables from .env file if it exists (for local development)
 BASE_DIR = Path(__file__).resolve().parent
-BOT_TOKEN = os.getenv("BOT_TOKEN", "8698770745:AAE-MGAqzvoor1UNOS8dVnjBpCGN27iGK7U")
+env_path = BASE_DIR / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+
+# Database configuration: use DATABASE_URL if available (Postgres), otherwise SQLite
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL:
+    USE_POSTGRES = True
+else:
+    USE_POSTGRES = False
+    # On Fly.io, use /data for SQLite; locally, use project directory
+    if os.getenv("FLY_APP_NAME"):
+        DB_PATH = Path("/data") / "bot.sqlite"
+    else:
+        DB_PATH = BASE_DIR / "bot.sqlite"
+
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_IDS = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip().isdigit()]
-FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY", "FLWSECK_TEST-e4d0a18f6a2c9a47529a1a819e4e3c6a-X")
-FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY", "FLWPUBK_TEST-cf04a727bf95223bc0558bf3c3294c07-X")
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "sk_test_02c971b7802c67b3460e3ccb34ce5b84110fa7b3")
+FLUTTERWAVE_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY")
+FLUTTERWAVE_PUBLIC_KEY = os.getenv("FLUTTERWAVE_PUBLIC_KEY")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
 PAYMENT_CALLBACK_URL = os.getenv("PAYMENT_CALLBACK_URL", "")
-DB_PATH = Path("/data") / "bot.sqlite"
