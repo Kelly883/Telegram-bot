@@ -5,7 +5,7 @@ primary_region = "jnb"
 dockerfile = "Dockerfile"
 
 [processes]
-app = ""
+app = "python main.py"
 
 [mounts]
 source = "telegram_bot_data"
