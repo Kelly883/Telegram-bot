@@ -11,12 +11,14 @@ if env_path.exists():
 # Database configuration: use DATABASE_URL if available (Postgres), otherwise SQLite
 DATABASE_URL = os.getenv("DATABASE_URL")
 if DATABASE_URL:
-    # Normalize Postgres connection schemes
-    if DATABASE_URL.startswith("psql://"):
-        DATABASE_URL = DATABASE_URL.replace("psql://", "postgres://", 1)
-    elif DATABASE_URL.startswith("postgresql://"):
+    print(f"DEBUG: Original DATABASE_URL = {repr(DATABASE_URL)}")  # Debug log
+    # Normalize Postgres connection schemes (handle case-insensitively)
+    if DATABASE_URL.lower().startswith("psql://"):
+        DATABASE_URL = "postgres://" + DATABASE_URL[len("psql://"):]
+    elif DATABASE_URL.lower().startswith("postgresql://"):
         # psycopg2 accepts both postgres:// and postgresql://, so keep as-is
         pass
+    print(f"DEBUG: Processed DATABASE_URL = {repr(DATABASE_URL)}")  # Debug log
     USE_POSTGRES = True
     DB_PATH = BASE_DIR / "bot.sqlite"
 else:
