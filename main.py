@@ -8,7 +8,9 @@ from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import TimedOut, NetworkError, RetryAfter
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -1138,51 +1140,103 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
         f"Added prediction ID: {pred_id}, title: {title}"
     )
     
+    # Send notifications to subscribers
+    notify_success, notify_message = await notify_subscribers(context.bot, level_id, title, content)
+    
     level = db.get_subscription_plan(level_id)
     keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
-    await update.message.reply_text(
-        "✅ <b>Prediction Saved Successfully!</b>\n\n"
-        f"💎 Plan: {html.escape(level['name'])}\n"
-        f"Notifying subscribers now...",
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="HTML"
-    )
-    notify_subscribers(level_id, title, content)
+    
+    if notify_success:
+        await update.message.reply_text(
+            "✅ <b>Prediction Saved Successfully!</b>\n\n"
+            f"💎 Plan: {html.escape(level['name'])}\n"
+            f"✅ {notify_message}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            "✅ <b>Prediction Saved Successfully!</b>\n\n"
+            f"💎 Plan: {html.escape(level['name'])}\n"
+            f"⚠️ {notify_message}",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
     return ConversationHandler.END
 
 
-def notify_subscribers(level_id: int, title: str, content: str):
-    subscription_users = []
-    with db.get_connection() as conn:
-        if hasattr(conn, 'cursor'):  # Postgres
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
-                    "WHERE s.level_id = %s AND s.active = 1",
-                    (level_id,),
-                )
-                rows = cur.fetchall()
-                subscription_users = [row["telegram_id"] for row in rows]
-        else:  # SQLite
-            rows = conn.execute(
-                "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
-                "WHERE s.level_id = ? AND s.active = 1",
-                (level_id,),
-            ).fetchall()
-            subscription_users = [row["telegram_id"] for row in rows]
+import time
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+from telegram.error import TimedOut, NetworkError, RetryAfter
+
+async def notify_subscribers(bot, level_id: int, title: str, content: str):
+    """Notify all active subscribers of a new prediction with retries and logging."""
+    print(f"DEBUG: Starting notify_subscribers for level {level_id}, title: {title}")
     
+    # Get subscribers from DB
+    subscription_users = []
+    try:
+        with db.get_connection() as conn:
+            if hasattr(conn, 'cursor'):  # Postgres
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
+                        "WHERE s.level_id = %s AND s.active = 1",
+                        (level_id,),
+                    )
+                    rows = cur.fetchall()
+                    subscription_users = [row["telegram_id"] for row in rows]
+            else:  # SQLite
+                rows = conn.execute(
+                    "SELECT u.telegram_id FROM subscriptions s JOIN users u ON s.user_id = u.id "
+                    "WHERE s.level_id = ? AND s.active = 1",
+                    (level_id,),
+                ).fetchall()
+                subscription_users = [row["telegram_id"] for row in rows]
+        print(f"DEBUG: Found {len(subscription_users)} subscribers to notify")
+    except Exception as e:
+        print(f"CRITICAL: Failed to get subscribers from DB: {e}")
+        return False, str(e)
+
+    # Compose message
     text = (
         f"📢 <b>New Prediction Available!</b>\n\n"
         f"📌 {html.escape(title)}\n\n"
         f"{html.escape(content)}"
     )
-    from telegram import Bot
-    bot = Bot(token=config.BOT_TOKEN)
+    print(f"DEBUG: Notification text composed, {len(text)} chars")
+
+    # Send notifications
+    success_count = 0
+    failed_count = 0
+    failed_users = []
+
     for telegram_id in subscription_users:
         try:
-            bot.send_message(chat_id=telegram_id, text=text, parse_mode="HTML")
-        except Exception:
-            continue
+            await _send_single_notification(bot, telegram_id, text)
+            success_count += 1
+            print(f"SUCCESS: Notification sent to user {telegram_id}")
+        except Exception as e:
+            failed_count += 1
+            failed_users.append((telegram_id, str(e)))
+            print(f"FAILED: Could not send notification to user {telegram_id}: {e}")
+
+    # Log result
+    print(f"NOTIFICATION COMPLETED: {success_count} succeeded, {failed_count} failed")
+    if failed_count > 0:
+        print(f"FAILED USERS: {failed_users}")
+        return False, f"{failed_count} notifications failed"
+    return True, "All notifications sent"
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type((TimedOut, NetworkError, RetryAfter))
+)
+async def _send_single_notification(bot, chat_id, text):
+    """Send a single notification with retries for transient errors."""
+    await bot.send_message(chat_id=chat_id, text=text, parse_mode="HTML")
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
