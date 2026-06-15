@@ -216,13 +216,18 @@ def get_user_by_id(user_id: int):
             return conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
 
 def list_users():
+    print("DEBUG: list_users() called")
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
                 cur.execute("SELECT * FROM users ORDER BY created_at DESC")
-                return cur.fetchall()
+                users = cur.fetchall()
+                print(f"DEBUG: Found {len(users)} users in Postgres")
+                return users
         else:
-            return conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+            users = conn.execute("SELECT * FROM users ORDER BY created_at DESC").fetchall()
+            print(f"DEBUG: Found {len(users)} users in SQLite at {DB_PATH}")
+            return users
 
 def create_subscription_plan(name: str, price_ngn: int, price_usd: int, description: str):
     with closing(get_connection()) as conn:

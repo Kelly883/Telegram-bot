@@ -134,11 +134,10 @@ def start_health_server():
     ADMIN_LEVEL_PRICE_NGN,
     ADMIN_LEVEL_PRICE_USD,
     ADMIN_LEVEL_DESCRIPTION,
-    ADMIN_PREDICTION_TITLE,
     ADMIN_PREDICTION_CONTENT,
     PAYMENT_VERIFY,
     MAIN_MENU,
-) = range(12)
+) = range(11)
 
 PHONE_PATTERN = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -894,11 +893,22 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     if action == "download_users":
         path = db.export_users_csv("users_export.csv")
+        # Send the CSV file as a document
+        from telegram import Document
+        from telegram.constants import ParseMode
+        with open(path, "rb") as f:
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=f,
+                filename="users_export.csv",
+                caption="✅ Users exported successfully!",
+            )
+        # Send back to admin panel
         keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
         await query.edit_message_text(
-            f"✅ Users exported successfully to <code>{path}</code>!",
+            "✅ Users exported successfully!",
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
+            parse_mode=ParseMode.HTML,
         )
         return ConversationHandler.END
     if action == "back":
@@ -985,23 +995,13 @@ async def admin_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["admin_prediction_level_id"] = int(level_id)
     await query.edit_message_text(
         f"📤 Uploading prediction for <b>{html.escape(level['name'])}</b>\n\n"
-        "Please send the <b>prediction title</b>:",
-        parse_mode="HTML"
-    )
-    return ADMIN_PREDICTION_TITLE
-
-
-async def admin_prediction_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["admin_prediction_title"] = update.message.text.strip()
-    await update.message.reply_text(
-        "Perfect! Now send the <b>full prediction content</b>:",
+        "Please send the <b>prediction content</b>:",
         parse_mode="HTML"
     )
     return ADMIN_PREDICTION_CONTENT
 
-
 async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    title = context.user_data["admin_prediction_title"]
+    title = "New Prediction"  # Default title if we skip the step
     content = update.message.text.strip()
     level_id = context.user_data["admin_prediction_level_id"]
     db.add_prediction(level_id, title, content)
@@ -1010,7 +1010,6 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     await update.message.reply_text(
         "✅ <b>Prediction Saved Successfully!</b>\n\n"
         f"💎 Plan: {html.escape(level['name'])}\n"
-        f"📌 Title: {html.escape(title)}\n"
         f"Notifying subscribers now...",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
@@ -1128,7 +1127,6 @@ def main():
             ADMIN_LEVEL_PRICE_USD: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_price_usd)],
             ADMIN_LEVEL_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_description)],
             ADMIN_CHOICE: [CallbackQueryHandler(admin_choice, pattern=r"^admin_level:")],
-            ADMIN_PREDICTION_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_title)],
             ADMIN_PREDICTION_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_content)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
