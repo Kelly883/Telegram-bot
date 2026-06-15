@@ -902,6 +902,14 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message = "📊 <b>All Predictions</b>\n\nNo predictions yet!"
         await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
         return ConversationHandler.END
+    if action == "upload_csv":
+        await query.edit_message_text(
+            "📥 <b>Upload Predictions CSV</b>\n\n"
+            "Please send the CSV file with your predictions now.\n"
+            "Use the template if you haven't already!",
+            parse_mode="HTML"
+        )
+        return ADMIN_UPLOAD_CSV
     if action == "download_csv_template":
         import csv
         template_path = "predictions_template.csv"
@@ -1174,6 +1182,81 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     return ConversationHandler.END
 
 
+async def admin_upload_csv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Check if message has a document
+    if not update.message.document:
+        await update.message.reply_text("❌ Please send a CSV file!")
+        return ADMIN_UPLOAD_CSV
+    
+    # Download the file
+    file = await context.bot.get_file(update.message.document.file_id)
+    import csv
+    from io import StringIO
+    content = await file.download_as_bytearray()
+    text = content.decode('utf-8')
+    csv_file = StringIO(text)
+    
+    # Parse CSV
+    reader = csv.DictReader(csv_file)
+    success_count = 0
+    error_count = 0
+    errors = []
+    
+    # Get admin user
+    admin_telegram_id = update.effective_user.id
+    admin_user = db.get_user_by_telegram_id(admin_telegram_id)
+    admin_user_id = admin_user['id'] if admin_user else None
+    
+    for idx, row in enumerate(reader, start=1):
+        try:
+            level_id = int(row['level_id'])
+            time = row.get('time') or None
+            home = row.get('home') or None
+            away = row.get('away') or None
+            prediction = row['prediction'].strip()
+            
+            # Validate
+            if not db.get_subscription_plan(level_id):
+                raise Exception(f"Invalid level_id: {level_id}")
+            if not prediction:
+                raise Exception("Prediction is required")
+            
+            # Add to DB
+            db.add_prediction(level_id, prediction, time=time, home=home, away=away, admin_user_id=admin_user_id)
+            success_count += 1
+        except Exception as e:
+            error_count += 1
+            errors.append(f"Row {idx}: {str(e)}")
+    
+    # Log admin action
+    db.log_admin_action(
+        admin_user_id,
+        "UPLOAD_PREDICTIONS_CSV",
+        f"Success: {success_count}, Errors: {error_count}"
+    )
+    
+    keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
+    
+    # Send result
+    if error_count == 0:
+        await update.message.reply_text(
+            f"✅ <b>CSV Upload Complete!</b>\n\n"
+            f"Successfully added {success_count} predictions!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+    else:
+        await update.message.reply_text(
+            f"⚠️ <b>CSV Upload Complete (with errors)</b>\n\n"
+            f"Success: {success_count}\n"
+            f"Errors: {error_count}\n\n"
+            f"Errors:\n" + "\n".join(errors[:10]) + ("\n...and more" if len(errors) > 10 else ""),
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+    return ConversationHandler.END
+
+
 async def notify_subscribers(bot, level_id: int, prediction: str, time: str = None, home: str = None, away: str = None):
     """Notify all active subscribers of a new prediction with retries and logging."""
     print(f"DEBUG: Starting notify_subscribers for level {level_id}")
@@ -1329,6 +1412,10 @@ def main():
             ADMIN_PREDICTION_HOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_home)],
             ADMIN_PREDICTION_AWAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_away)],
             ADMIN_PREDICTION_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_content)],
+            ADMIN_UPLOAD_CSV: [
+                MessageHandler(filters.Document.ALL & ~filters.COMMAND, admin_upload_csv),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, admin_upload_csv),
+            ],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,

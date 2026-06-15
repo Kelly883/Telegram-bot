@@ -388,10 +388,18 @@ def add_prediction(
 
 
 def list_predictions(level_id: int = None):
-    """List all predictions, optionally filtered by level_id"""
+    """List all predictions, optionally filtered by level_id. Backward-compatible with old schema."""
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
+                # Check column names
+                cur.execute("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'predictions'
+                """)
+                columns = [row[0] for row in cur.fetchall()]
+                
                 if level_id:
                     cur.execute(
                         """SELECT p.*, u.name as admin_name 
@@ -408,24 +416,75 @@ def list_predictions(level_id: int = None):
                            LEFT JOIN users u ON p.admin_user_id = u.id 
                            ORDER BY p.created_at DESC"""
                     )
-                return cur.fetchall()
+                # Process rows to be backward-compatible
+                rows = cur.fetchall()
+                results = []
+                for row in rows:
+                    # Convert to dict
+                    pred = dict(row)
+                    # Backward compatibility
+                    if 'prediction' not in pred or pred['prediction'] is None:
+                        pred['prediction'] = (pred.get('title', '') + '\n\n' + pred.get('content', '')).strip() or None
+                    if 'time' not in pred or pred['time'] is None:
+                        pred['time'] = pred.get('game_date')
+                    if 'home' not in pred or 'away' not in pred:
+                        teams = pred.get('teams')
+                        if teams and ' vs ' in teams:
+                            home, away = teams.split(' vs ', 1)
+                            pred['home'] = home.strip()
+                            pred['away'] = away.strip()
+                        else:
+                            pred['home'] = None
+                            pred['away'] = None
+                    results.append(pred)
+                return results
         else:
+            # SQLite
+            cursor = conn.execute("PRAGMA table_info(predictions)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
             if level_id:
-                return conn.execute(
+                cursor = conn.execute(
                     """SELECT p.*, u.name as admin_name 
                        FROM predictions p 
                        LEFT JOIN users u ON p.admin_user_id = u.id 
                        WHERE p.level_id = ? 
                        ORDER BY p.created_at DESC""",
                     (level_id,),
-                ).fetchall()
+                )
             else:
-                return conn.execute(
+                cursor = conn.execute(
                     """SELECT p.*, u.name as admin_name 
                        FROM predictions p 
                        LEFT JOIN users u ON p.admin_user_id = u.id 
                        ORDER BY p.created_at DESC"""
-                ).fetchall()
+                )
+            # Process rows
+            rows = cursor.fetchall()
+            results = []
+            for row in rows:
+                pred = dict(row)
+                # Backward compatibility
+                if 'prediction' not in pred or pred['prediction'] is None:
+                    pred['prediction'] = (pred.get('title', '') + '\n\n' + pred.get('content', '')).strip() or None
+                if 'time' not in pred or pred['time'] is None:
+                    pred['time'] = pred.get('game_date')
+                if 'home' not in pred or 'away' not in pred:
+                    teams = pred.get('teams')
+                    if teams and ' vs ' in teams:
+                        home, away = teams.split(' vs ', 1)
+                        pred['home'] = home.strip()
+                        pred['away'] = away.strip()
+                    else:
+                        pred['home'] = None
+                        pred['away'] = None
+                results.append(pred)
+            return results
+
+
+def list_predictions_for_plan(level_id: int):
+    """List predictions for a plan. Backward-compatible."""
+    return list_predictions(level_id)
 
 
 def log_admin_action(admin_user_id: int, action: str, details: str = None):
