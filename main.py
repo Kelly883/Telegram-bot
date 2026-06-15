@@ -795,7 +795,9 @@ def verify_paystack_payment_enhanced(tx_ref: str, payment: dict):
             return False, data
         
         tx_data = data.get("data", {})
-        is_successful = tx_data.get("status") in ("success", "paid")
+        # Accept more possible successful statuses for Paystack
+        is_successful = tx_data.get("status") in ("success", "paid", "completed", "successful")
+        print(f"DEBUG: Paystack tx status: {tx_data.get('status')}, is_successful: {is_successful}")
         return is_successful, tx_data
     except Exception as e:
         print(f"DEBUG: Paystack error: {e}")
@@ -819,7 +821,9 @@ def verify_flutterwave_payment_enhanced(tx_ref: str, payment: dict):
         # Flutterwave might return data as a list, let's check
         if isinstance(tx_data, list) and len(tx_data) > 0:
             tx_data = tx_data[0]
-        is_successful = tx_data.get("status") == "successful"
+        # Accept more possible successful statuses for Flutterwave
+        is_successful = tx_data.get("status") in ("successful", "completed", "success", "paid")
+        print(f"DEBUG: Flutterwave tx status: {tx_data.get('status')}, is_successful: {is_successful}")
         return is_successful, tx_data
     except Exception as e:
         print(f"DEBUG: Flutterwave error: {e}")
