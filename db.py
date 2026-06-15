@@ -45,11 +45,10 @@ SQL_CREATE = [
     CREATE TABLE IF NOT EXISTS predictions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         level_id INTEGER NOT NULL,
-        game_id TEXT,
-        game_date TEXT,
-        teams TEXT,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
+        time TEXT,
+        home TEXT,
+        away TEXT,
+        prediction TEXT NOT NULL,
         admin_user_id INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(level_id) REFERENCES subscription_levels(id),
@@ -135,11 +134,10 @@ SQL_CREATE_POSTGRES = [
     CREATE TABLE IF NOT EXISTS predictions (
         id SERIAL PRIMARY KEY,
         level_id INTEGER NOT NULL,
-        game_id TEXT,
-        game_date TEXT,
-        teams TEXT,
-        title TEXT NOT NULL,
-        content TEXT NOT NULL,
+        time TEXT,
+        home TEXT,
+        away TEXT,
+        prediction TEXT NOT NULL,
         admin_user_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(level_id) REFERENCES subscription_levels(id),
@@ -342,29 +340,27 @@ def get_active_subscription(user_id: int):
 
 def add_prediction(
     level_id: int,
-    title: str,
-    content: str,
-    game_id: str = None,
-    game_date: str = None,
-    teams: str = None,
+    prediction: str,
+    time: str = None,
+    home: str = None,
+    away: str = None,
     admin_user_id: int = None,
 ):
-    print(f"DEBUG: add_prediction called with level_id={level_id}, title={title!r}, content={content!r}, game_id={game_id}, game_date={game_date}, teams={teams}, admin_user_id={admin_user_id}")
+    print(f"DEBUG: add_prediction called with level_id={level_id}, time={time}, home={home}, away={away}, prediction={prediction!r}, admin_user_id={admin_user_id}")
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
                 cur.execute(
                     """INSERT INTO predictions 
-                       (level_id, title, content, game_id, game_date, teams, admin_user_id) 
-                       VALUES (%s, %s, %s, %s, %s, %s, %s) 
+                       (level_id, time, home, away, prediction, admin_user_id) 
+                       VALUES (%s, %s, %s, %s, %s, %s) 
                        RETURNING id""",
                     (
                         level_id,
-                        title.strip(),
-                        content.strip(),
-                        game_id,
-                        game_date,
-                        teams,
+                        time,
+                        home,
+                        away,
+                        prediction.strip(),
                         admin_user_id,
                     ),
                 )
@@ -375,15 +371,14 @@ def add_prediction(
         else:
             cur = conn.execute(
                 """INSERT INTO predictions 
-                   (level_id, title, content, game_id, game_date, teams, admin_user_id) 
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   (level_id, time, home, away, prediction, admin_user_id) 
+                   VALUES (?, ?, ?, ?, ?, ?)""",
                 (
                     level_id,
-                    title.strip(),
-                    content.strip(),
-                    game_id,
-                    game_date,
-                    teams,
+                    time,
+                    home,
+                    away,
+                    prediction.strip(),
                     admin_user_id,
                 ),
             )

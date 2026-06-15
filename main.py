@@ -136,15 +136,14 @@ def start_health_server():
     ADMIN_LEVEL_PRICE_NGN,
     ADMIN_LEVEL_PRICE_USD,
     ADMIN_LEVEL_DESCRIPTION,
-    ADMIN_PREDICTION_GAME_ID,
-    ADMIN_PREDICTION_GAME_DATE,
-    ADMIN_PREDICTION_TEAMS,
-    ADMIN_PREDICTION_TITLE,
+    ADMIN_PREDICTION_TIME,
+    ADMIN_PREDICTION_HOME,
+    ADMIN_PREDICTION_AWAY,
     ADMIN_PREDICTION_CONTENT,
     ADMIN_UPLOAD_CSV,
     PAYMENT_VERIFY,
     MAIN_MENU,
-) = range(16)
+) = range(15)
 
 PHONE_PATTERN = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -299,7 +298,14 @@ async def handle_menu_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             return
         text = "🔮 <b>Latest Predictions</b>\n\n"
         for pred in predictions[:10]:
-            text += f"📌 <b>{html.escape(pred['title'])}</b>\n{html.escape(pred['content'])}\n\n"
+            text += f"📊 <b>Prediction</b>\n"
+            if pred.get('time'):
+                text += f"🕐 Time: {html.escape(pred['time'])}\n"
+            if pred.get('home'):
+                text += f"🏠 Home: {html.escape(pred['home'])}\n"
+            if pred.get('away'):
+                text += f"✈️ Away: {html.escape(pred['away'])}\n"
+            text += f"🔮 Prediction: {html.escape(pred['prediction'])}\n\n"
         keyboard = [[InlineKeyboardButton("🏠 Back to Main Menu", callback_data="menu:back")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
     
@@ -811,7 +817,17 @@ async def show_predictions(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not predictions:
         await update.message.reply_text("No predictions yet for your subscription level.")
         return
-    texts = [f"*{html.escape(pred['title'])}*\n{html.escape(pred['content'])}" for pred in predictions]
+    texts = []
+    for pred in predictions:
+        text = "📊 <b>Prediction</b>\n"
+        if pred.get('time'):
+            text += f"🕐 Time: {html.escape(pred['time'])}\n"
+        if pred.get('home'):
+            text += f"🏠 Home: {html.escape(pred['home'])}\n"
+        if pred.get('away'):
+            text += f"✈️ Away: {html.escape(pred['away'])}\n"
+        text += f"🔮 Prediction: {html.escape(pred['prediction'])}"
+        texts.append(text)
     await update.message.reply_text("\n\n".join(texts), parse_mode="HTML")
 
 
@@ -869,16 +885,17 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lines = []
             for idx, pred in enumerate(predictions, start=1):
                 level = db.get_subscription_plan(pred['level_id'])
-                line = (
-                    f"📊 <b>Prediction {idx}</b>\n"
-                    f"   🆔 Game ID: {pred['game_id'] or 'N/A'}\n"
-                    f"   📅 Game Date: {pred['game_date'] or 'N/A'}\n"
-                    f"   👥 Teams: {pred['teams'] or 'N/A'}\n"
-                    f"   💎 Plan: {level['name'] if level else 'N/A'}\n"
-                    f"   📝 Title: {html.escape(pred['title'])}\n"
-                    f"   👤 Admin: {pred['admin_name'] or 'N/A'}\n"
-                    f"   🕐 Uploaded: {pred['created_at']}\n"
-                )
+                line = f"📊 <b>Prediction {idx}</b>\n"
+                if pred.get('time'):
+                    line += f"🕐 Time: {pred['time']}\n"
+                if pred.get('home'):
+                    line += f"🏠 Home: {html.escape(pred['home'])}\n"
+                if pred.get('away'):
+                    line += f"✈️ Away: {html.escape(pred['away'])}\n"
+                line += f"💎 Plan: {level['name'] if level else 'N/A'}\n"
+                line += f"📝 Prediction: {html.escape(pred['prediction'])}\n"
+                line += f"👤 Admin: {pred['admin_name'] or 'N/A'}\n"
+                line += f"🕐 Uploaded: {pred['created_at']}\n"
                 lines.append(line)
             message = "📊 <b>All Predictions</b>\n\n" + "\n".join(lines)
         else:
@@ -891,7 +908,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         with open(template_path, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             writer.writerow([
-                "level_id", "game_id", "game_date", "teams", "title", "content"
+                "level_id", "time", "home", "away", "prediction"
             ])
         with open(template_path, "rb") as f:
             await context.bot.send_document(
@@ -1061,65 +1078,54 @@ async def admin_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["admin_prediction_level_id"] = int(level_id)
     await query.edit_message_text(
         f"📤 Uploading prediction for <b>{html.escape(level['name'])}</b>\n\n"
-        "Please send the <b>Game ID</b> (or send '-' if none):",
+        "Please send the <b>Time</b> (e.g., 2024-12-31 18:00) (or send '-' if none):",
         parse_mode="HTML"
     )
-    return ADMIN_PREDICTION_GAME_ID
+    return ADMIN_PREDICTION_TIME
 
 
-async def admin_prediction_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    game_id = update.message.text.strip()
-    if game_id == "-":
-        game_id = None
-    context.user_data["admin_prediction_game_id"] = game_id
+async def admin_prediction_time(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    time = update.message.text.strip()
+    if time == "-":
+        time = None
+    context.user_data["admin_prediction_time"] = time
     await update.message.reply_text(
-        "Great! Now send the <b>Game Date</b> (e.g., 2024-12-31) (or send '-' if none):",
+        "Great! Now send the <b>Home Team</b> (e.g., Manchester United) (or send '-' if none):",
         parse_mode="HTML"
     )
-    return ADMIN_PREDICTION_GAME_DATE
+    return ADMIN_PREDICTION_HOME
 
 
-async def admin_prediction_game_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    game_date = update.message.text.strip()
-    if game_date == "-":
-        game_date = None
-    context.user_data["admin_prediction_game_date"] = game_date
+async def admin_prediction_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    home = update.message.text.strip()
+    if home == "-":
+        home = None
+    context.user_data["admin_prediction_home"] = home
     await update.message.reply_text(
-        "Perfect! Now send the <b>Teams</b> (e.g., Team A vs Team B) (or send '-' if none):",
+        "Perfect! Now send the <b>Away Team</b> (e.g., Liverpool) (or send '-' if none):",
         parse_mode="HTML"
     )
-    return ADMIN_PREDICTION_TEAMS
+    return ADMIN_PREDICTION_AWAY
 
 
-async def admin_prediction_teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    teams = update.message.text.strip()
-    if teams == "-":
-        teams = None
-    context.user_data["admin_prediction_teams"] = teams
+async def admin_prediction_away(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    away = update.message.text.strip()
+    if away == "-":
+        away = None
+    context.user_data["admin_prediction_away"] = away
     await update.message.reply_text(
-        "Okay, now send the <b>Prediction Title</b>:",
-        parse_mode="HTML"
-    )
-    return ADMIN_PREDICTION_TITLE
-
-
-async def admin_prediction_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    title = update.message.text.strip()
-    context.user_data["admin_prediction_title"] = title
-    await update.message.reply_text(
-        "Almost done! Now send the <b>Prediction Content</b>:",
+        "Okay, now send the <b>Prediction</b>:",
         parse_mode="HTML"
     )
     return ADMIN_PREDICTION_CONTENT
 
 
 async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    content = update.message.text.strip()
+    prediction = update.message.text.strip()
     level_id = context.user_data["admin_prediction_level_id"]
-    game_id = context.user_data.get("admin_prediction_game_id")
-    game_date = context.user_data.get("admin_prediction_game_date")
-    teams = context.user_data.get("admin_prediction_teams")
-    title = context.user_data.get("admin_prediction_title", "New Prediction")
+    time = context.user_data.get("admin_prediction_time")
+    home = context.user_data.get("admin_prediction_home")
+    away = context.user_data.get("admin_prediction_away")
     
     # Get admin user
     admin_telegram_id = update.effective_user.id
@@ -1128,20 +1134,23 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     
     # Add prediction to DB
     pred_id = db.add_prediction(
-        level_id, title, content,
-        game_id=game_id, game_date=game_date,
-        teams=teams, admin_user_id=admin_user_id
+        level_id,
+        prediction,
+        time=time,
+        home=home,
+        away=away,
+        admin_user_id=admin_user_id,
     )
     
     # Log admin action
     db.log_admin_action(
         admin_user_id,
         "ADD_PREDICTION",
-        f"Added prediction ID: {pred_id}, title: {title}"
+        f"Added prediction ID: {pred_id}"
     )
     
     # Send notifications to subscribers
-    notify_success, notify_message = await notify_subscribers(context.bot, level_id, title, content)
+    notify_success, notify_message = await notify_subscribers(context.bot, level_id, prediction, time, home, away)
     
     level = db.get_subscription_plan(level_id)
     keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
@@ -1165,13 +1174,9 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     return ConversationHandler.END
 
 
-import time
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
-from telegram.error import TimedOut, NetworkError, RetryAfter
-
-async def notify_subscribers(bot, level_id: int, title: str, content: str):
+async def notify_subscribers(bot, level_id: int, prediction: str, time: str = None, home: str = None, away: str = None):
     """Notify all active subscribers of a new prediction with retries and logging."""
-    print(f"DEBUG: Starting notify_subscribers for level {level_id}, title: {title}")
+    print(f"DEBUG: Starting notify_subscribers for level {level_id}")
     
     # Get subscribers from DB
     subscription_users = []
@@ -1199,11 +1204,16 @@ async def notify_subscribers(bot, level_id: int, title: str, content: str):
         return False, str(e)
 
     # Compose message
-    text = (
-        f"📢 <b>New Prediction Available!</b>\n\n"
-        f"📌 {html.escape(title)}\n\n"
-        f"{html.escape(content)}"
-    )
+    text = "📢 <b>New Prediction Available!</b>\n\n"
+    if time:
+        text += f"🕐 Time: {html.escape(time)}\n"
+    if home and away:
+        text += f"🏟️ Match: {html.escape(home)} vs {html.escape(away)}\n"
+    elif home:
+        text += f"🏟️ Home: {html.escape(home)}\n"
+    elif away:
+        text += f"🏟️ Away: {html.escape(away)}\n"
+    text += f"\n{html.escape(prediction)}"
     print(f"DEBUG: Notification text composed, {len(text)} chars")
 
     # Send notifications
@@ -1315,10 +1325,9 @@ def main():
             ADMIN_LEVEL_PRICE_USD: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_price_usd)],
             ADMIN_LEVEL_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_description)],
             ADMIN_CHOICE: [CallbackQueryHandler(admin_choice, pattern=r"^admin_level:")],
-            ADMIN_PREDICTION_GAME_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_game_id)],
-            ADMIN_PREDICTION_GAME_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_game_date)],
-            ADMIN_PREDICTION_TEAMS: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_teams)],
-            ADMIN_PREDICTION_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_title)],
+            ADMIN_PREDICTION_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_time)],
+            ADMIN_PREDICTION_HOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_home)],
+            ADMIN_PREDICTION_AWAY: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_away)],
             ADMIN_PREDICTION_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_content)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
