@@ -680,7 +680,11 @@ def verify_gateway_payment(payment):
         
         # Check 2: Transaction Timestamp Validation (not older than 24 hours)
         try:
-            payment_time = datetime.fromisoformat(payment["created_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+            created_at = payment["created_at"]
+            if isinstance(created_at, datetime):
+                payment_time = created_at.astimezone(timezone.utc)
+            else:
+                payment_time = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(timezone.utc)
             time_diff = datetime.now(timezone.utc) - payment_time
             if time_diff.total_seconds() > 86400:  # 24 hours
                 fraud_flags.append(f"TRANSACTION_TOO_OLD|age_hours:{time_diff.total_seconds() / 3600}")
@@ -895,7 +899,12 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 line += f"💎 Plan: {level['name'] if level else 'N/A'}\n"
                 line += f"📝 Prediction: {html.escape(pred['prediction'])}\n"
                 line += f"👤 Admin: {pred['admin_name'] or 'N/A'}\n"
-                line += f"🕐 Uploaded: {pred['created_at']}\n"
+                created_at = pred['created_at']
+                if isinstance(created_at, datetime):
+                    created_at_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    created_at_str = str(created_at)
+                line += f"🕐 Uploaded: {created_at_str}\n"
                 lines.append(line)
             message = "📊 <b>All Predictions</b>\n\n" + "\n".join(lines)
         else:
@@ -954,13 +963,19 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         users = db.list_users()
         keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
         if users:
-            lines = [
-                f"👤 <b>{html.escape(u['name'])}</b>\n"
-                f"   📧 {u['email']}\n"
-                f"   📱 {u['phone']}\n"
-                f"   📅 Joined: {u['created_at']}\n"
-                for u in users
-            ]
+            lines = []
+            for u in users:
+                created_at = u['created_at']
+                if isinstance(created_at, datetime):
+                    created_at_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    created_at_str = str(created_at)
+                lines.append(
+                    f"👤 <b>{html.escape(u['name'])}</b>\n"
+                    f"   📧 {u['email']}\n"
+                    f"   📱 {u['phone']}\n"
+                    f"   📅 Joined: {created_at_str}\n"
+                )
             message = "👥 <b>All Users</b>\n\n" + "\n".join(lines)
         else:
             message = "👥 <b>All Users</b>\n\nNo users yet!"
@@ -1342,7 +1357,11 @@ def process_pending_payments(bot):
     payments = db.get_all_pending_payments()
     for payment in payments:
         # Check if transaction is older than 24 hours
-        payment_time = datetime.fromisoformat(payment["created_at"].replace("Z", "+00:00")).astimezone(timezone.utc)
+        created_at = payment["created_at"]
+        if isinstance(created_at, datetime):
+            payment_time = created_at.astimezone(timezone.utc)
+        else:
+            payment_time = datetime.fromisoformat(created_at.replace("Z", "+00:00")).astimezone(timezone.utc)
         time_diff = datetime.now(timezone.utc) - payment_time
         if time_diff.total_seconds() > 86400:
             db.update_payment_status(payment["tx_ref"], "EXPIRED")

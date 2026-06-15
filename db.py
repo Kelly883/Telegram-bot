@@ -599,12 +599,18 @@ def log_verification_attempt(payment_id: int, tx_ref: str, status: str, gateway_
 
 def export_users_csv(path: str):
     import csv
+    from datetime import datetime
     users = list_users()
     with open(path, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Telegram ID", "Name", "Email", "Phone", "Country Code", "Registered"])
         for user in users:
-            writer.writerow([user["telegram_id"], user["name"], user["email"], user["phone"], user["country_code"], user["created_at"]])
+            created_at = user["created_at"]
+            if isinstance(created_at, datetime):
+                created_at_str = created_at.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                created_at_str = str(created_at)
+            writer.writerow([user["telegram_id"], user["name"], user["email"], user["phone"], user["country_code"], created_at_str])
     return path
 
 # Backward compatible aliases
