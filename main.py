@@ -223,7 +223,6 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
         [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
         [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
-        [InlineKeyboardButton("🏠 Back to Menu", callback_data="menu:back")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
