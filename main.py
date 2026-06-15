@@ -407,46 +407,68 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["register_name"] = update.message.text.strip()
-    await update.message.reply_text("Great! Please send your email address.")
-    return REG_EMAIL
+    try:
+        print(f"DEBUG register_name: got name = {repr(update.message.text)}")
+        context.user_data["register_name"] = update.message.text.strip()
+        await update.message.reply_text("Great! Please send your email address.")
+        return REG_EMAIL
+    except Exception as e:
+        print(f"ERROR register_name: {e}", exc_info=True)
+        await update.message.reply_text(f"⚠️ Error: {e}")
+        return REG_NAME
 
 
 async def register_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    email = update.message.text.strip()
-    if "@" not in email or "." not in email:
-        await update.message.reply_text("Please send a valid email address.")
+    try:
+        email = update.message.text.strip()
+        print(f"DEBUG register_email: got email = {repr(email)}")
+        if "@" not in email or "." not in email:
+            await update.message.reply_text("Please send a valid email address.")
+            return REG_EMAIL
+        context.user_data["register_email"] = email
+        await update.message.reply_text(
+            "Now send your phone number including country code, for example +2348012345678."
+        )
+        return REG_PHONE
+    except Exception as e:
+        print(f"ERROR register_email: {e}", exc_info=True)
+        await update.message.reply_text(f"⚠️ Error: {e}")
         return REG_EMAIL
-    context.user_data["register_email"] = email
-    await update.message.reply_text(
-        "Now send your phone number including country code, for example +2348012345678."
-    )
-    return REG_PHONE
 
 
 async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    phone = update.message.text.strip()
-    if not PHONE_PATTERN.match(phone):
+    try:
+        phone = update.message.text.strip()
+        print(f"DEBUG register_phone: phone = {repr(phone)}")
+        if not PHONE_PATTERN.match(phone):
+            await update.message.reply_text(
+                "Phone must include country code and only digits, for example +2348012345678."
+            )
+            return REG_PHONE
+        name = context.user_data["register_name"]
+        email = context.user_data["register_email"]
+        country_code = phone[1:4] if len(phone) >= 4 else phone[1:]
+        print(f"DEBUG register_phone: creating user with {name}, {email}, {phone}, {country_code}")
+        db.create_user(update.effective_user.id, name, email, phone, country_code)
+        user = db.get_user_by_telegram_id(update.effective_user.id)
+        print(f"DEBUG register_phone: got user = {user}")
+        welcome_msg = (
+            f"👋 <b>Welcome, {html.escape(user['name'])}!</b>\n"
+            "❌ <b>No active subscription</b>\n\n"
+            "Tap a button below to continue."
+        )
         await update.message.reply_text(
-            "Phone must include country code and only digits, for example +2348012345678."
+            welcome_msg,
+            reply_markup=get_user_menu_keyboard(update.effective_user.id),
+            parse_mode="HTML"
+        )
+        return ConversationHandler.END
+    except Exception as e:
+        print(f"ERROR register_phone: {e}", exc_info=True)
+        await update.message.reply_text(
+            f"⚠️ An error occurred: {e}"
         )
         return REG_PHONE
-    name = context.user_data["register_name"]
-    email = context.user_data["register_email"]
-    country_code = phone[1:4] if len(phone) >= 4 else phone[1:]
-    db.create_user(update.effective_user.id, name, email, phone, country_code)
-    user = db.get_user_by_telegram_id(update.effective_user.id)
-    welcome_msg = (
-        f"👋 <b>Welcome, {html.escape(user['name'])}!</b>\n"
-        "❌ <b>No active subscription</b>\n\n"
-        "Tap a button below to continue."
-    )
-    await update.message.reply_text(
-        welcome_msg,
-        reply_markup=get_user_menu_keyboard(update.effective_user.id),
-        parse_mode="HTML"
-    )
-    return ConversationHandler.END
 
 
 def is_nigerian(user: dict) -> bool:
