@@ -102,7 +102,7 @@ SQL_CREATE_POSTGRES = [
     """
     CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
-        telegram_id INTEGER UNIQUE,
+        telegram_id BIGINT UNIQUE,
         name TEXT NOT NULL,
         email TEXT NOT NULL,
         phone TEXT NOT NULL,
@@ -139,7 +139,7 @@ SQL_CREATE_POSTGRES = [
         home TEXT,
         away TEXT,
         prediction TEXT NOT NULL,
-        admin_user_id INTEGER,
+        admin_user_id BIGINT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(level_id) REFERENCES subscription_levels(id),
         FOREIGN KEY(admin_user_id) REFERENCES users(id)
@@ -177,7 +177,7 @@ SQL_CREATE_POSTGRES = [
     """
     CREATE TABLE IF NOT EXISTS admin_audit_log (
         id SERIAL PRIMARY KEY,
-        admin_user_id INTEGER NOT NULL,
+        admin_user_id BIGINT NOT NULL,
         action TEXT NOT NULL,
         details TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -201,6 +201,24 @@ def init_db():
             with closing(conn.cursor()) as cur:
                 for stmt in SQL_CREATE_POSTGRES:
                     cur.execute(stmt)
+                # Alter existing users table to use BIGINT for telegram_id if needed
+                try:
+                    cur.execute("ALTER TABLE users ALTER COLUMN telegram_id TYPE BIGINT")
+                    print("DEBUG init_db: Changed users.telegram_id to BIGINT")
+                except Exception as e:
+                    print(f"DEBUG init_db: Altering users.telegram_id failed (might already be done): {e}")
+                # Alter predictions.admin_user_id to BIGINT
+                try:
+                    cur.execute("ALTER TABLE predictions ALTER COLUMN admin_user_id TYPE BIGINT")
+                    print("DEBUG init_db: Changed predictions.admin_user_id to BIGINT")
+                except Exception as e:
+                    print(f"DEBUG init_db: Altering predictions.admin_user_id failed (might already be done): {e}")
+                # Alter admin_audit_log.admin_user_id to BIGINT
+                try:
+                    cur.execute("ALTER TABLE admin_audit_log ALTER COLUMN admin_user_id TYPE BIGINT")
+                    print("DEBUG init_db: Changed admin_audit_log.admin_user_id to BIGINT")
+                except Exception as e:
+                    print(f"DEBUG init_db: Altering admin_audit_log.admin_user_id failed (might already be done): {e}")
             conn.commit()
         else:
             Path(DB_PATH.parent).mkdir(parents=True, exist_ok=True)
