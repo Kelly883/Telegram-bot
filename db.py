@@ -45,10 +45,15 @@ SQL_CREATE = [
     CREATE TABLE IF NOT EXISTS predictions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         level_id INTEGER NOT NULL,
+        game_id TEXT,
+        game_date TEXT,
+        teams TEXT,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        admin_user_id INTEGER,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(level_id) REFERENCES subscription_levels(id)
+        FOREIGN KEY(level_id) REFERENCES subscription_levels(id),
+        FOREIGN KEY(admin_user_id) REFERENCES users(id)
     )
     """,
     """
@@ -78,6 +83,16 @@ SQL_CREATE = [
         fraud_flags TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(payment_id) REFERENCES payments(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        admin_user_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(admin_user_id) REFERENCES users(id)
     )
     """,
 ]
@@ -120,10 +135,15 @@ SQL_CREATE_POSTGRES = [
     CREATE TABLE IF NOT EXISTS predictions (
         id SERIAL PRIMARY KEY,
         level_id INTEGER NOT NULL,
+        game_id TEXT,
+        game_date TEXT,
+        teams TEXT,
         title TEXT NOT NULL,
         content TEXT NOT NULL,
+        admin_user_id INTEGER,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY(level_id) REFERENCES subscription_levels(id)
+        FOREIGN KEY(level_id) REFERENCES subscription_levels(id),
+        FOREIGN KEY(admin_user_id) REFERENCES users(id)
     )
     """,
     """
@@ -153,6 +173,16 @@ SQL_CREATE_POSTGRES = [
         fraud_flags TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(payment_id) REFERENCES payments(id)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+        id SERIAL PRIMARY KEY,
+        admin_user_id INTEGER NOT NULL,
+        action TEXT NOT NULL,
+        details TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY(admin_user_id) REFERENCES users(id)
     )
     """,
 ]
@@ -310,24 +340,119 @@ def get_active_subscription(user_id: int):
                 (user_id,),
             ).fetchone()
 
-def add_prediction(level_id: int, title: str, content: str):
+def add_prediction(
+    level_id: int,
+    title: str,
+    content: str,
+    game_id: str = None,
+    game_date: str = None,
+    teams: str = None,
+    admin_user_id: int = None,
+):
+    print(f"DEBUG: add_prediction called with level_id={level_id}, title={title!r}, content={content!r}, game_id={game_id}, game_date={game_date}, teams={teams}, admin_user_id={admin_user_id}")
     with closing(get_connection()) as conn:
         if USE_POSTGRES:
             with closing(conn.cursor()) as cur:
                 cur.execute(
-                    "INSERT INTO predictions (level_id, title, content) VALUES (%s, %s, %s) RETURNING id",
-                    (level_id, title.strip(), content.strip()),
+                    """INSERT INTO predictions 
+                       (level_id, title, content, game_id, game_date, teams, admin_user_id) 
+                       VALUES (%s, %s, %s, %s, %s, %s, %s) 
+                       RETURNING id""",
+                    (
+                        level_id,
+                        title.strip(),
+                        content.strip(),
+                        game_id,
+                        game_date,
+                        teams,
+                        admin_user_id,
+                    ),
                 )
                 result = cur.fetchone()
                 conn.commit()
+                print(f"DEBUG: Postgres: inserted prediction with id={result}")
                 return result['id']
         else:
             cur = conn.execute(
-                "INSERT INTO predictions (level_id, title, content) VALUES (?, ?, ?)",
-                (level_id, title.strip(), content.strip()),
+                """INSERT INTO predictions 
+                   (level_id, title, content, game_id, game_date, teams, admin_user_id) 
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    level_id,
+                    title.strip(),
+                    content.strip(),
+                    game_id,
+                    game_date,
+                    teams,
+                    admin_user_id,
+                ),
             )
             conn.commit()
+            print(f"DEBUG: SQLite: inserted prediction with id={cur.lastrowid}")
             return cur.lastrowid
+
+
+def list_predictions(level_id: int = None):
+    """List all predictions, optionally filtered by level_id"""
+    with closing(get_connection()) as conn:
+        if USE_POSTGRES:
+            with closing(conn.cursor()) as cur:
+                if level_id:
+                    cur.execute(
+                        """SELECT p.*, u.name as admin_name 
+                           FROM predictions p 
+                           LEFT JOIN users u ON p.admin_user_id = u.id 
+                           WHERE p.level_id = %s 
+                           ORDER BY p.created_at DESC""",
+                        (level_id,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT p.*, u.name as admin_name 
+                           FROM predictions p 
+                           LEFT JOIN users u ON p.admin_user_id = u.id 
+                           ORDER BY p.created_at DESC"""
+                    )
+                return cur.fetchall()
+        else:
+            if level_id:
+                return conn.execute(
+                    """SELECT p.*, u.name as admin_name 
+                       FROM predictions p 
+                       LEFT JOIN users u ON p.admin_user_id = u.id 
+                       WHERE p.level_id = ? 
+                       ORDER BY p.created_at DESC""",
+                    (level_id,),
+                ).fetchall()
+            else:
+                return conn.execute(
+                    """SELECT p.*, u.name as admin_name 
+                       FROM predictions p 
+                       LEFT JOIN users u ON p.admin_user_id = u.id 
+                       ORDER BY p.created_at DESC"""
+                ).fetchall()
+
+
+def log_admin_action(admin_user_id: int, action: str, details: str = None):
+    """Log an admin action to the audit log"""
+    print(f"DEBUG: log_admin_action called with admin_user_id={admin_user_id}, action={action!r}, details={details!r}")
+    with closing(get_connection()) as conn:
+        if USE_POSTGRES:
+            with closing(conn.cursor()) as cur:
+                cur.execute(
+                    """INSERT INTO admin_audit_log (admin_user_id, action, details) 
+                       VALUES (%s, %s, %s) 
+                       RETURNING id""",
+                    (admin_user_id, action, details),
+                )
+                conn.commit()
+        else:
+            conn.execute(
+                """INSERT INTO admin_audit_log (admin_user_id, action, details) 
+                   VALUES (?, ?, ?)""",
+                (admin_user_id, action, details),
+            )
+            conn.commit()
 
 def list_predictions_for_plan(level_id: int):
     with closing(get_connection()) as conn:
