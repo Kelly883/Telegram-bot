@@ -144,7 +144,7 @@ def start_health_server():
     ADMIN_UPLOAD_CSV,
     PAYMENT_VERIFY,
     MAIN_MENU,
-) = range(14)
+) = range(16)
 
 PHONE_PATTERN = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -1305,6 +1305,7 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
+        per_user=True,
     )
     admin_flow = ConversationHandler(
         entry_points=[CommandHandler("admin", admin), CallbackQueryHandler(admin_callback, pattern=r"^admin:")],
@@ -1322,6 +1323,7 @@ def main():
         },
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
+        per_user=True,
     )
     # Important: Add admin_flow FIRST so it takes priority over registration!
     application.add_handler(admin_flow)
