@@ -1135,8 +1135,9 @@ def main():
         fallbacks=[CommandHandler("cancel", cancel)],
         allow_reentry=True,
     )
-    application.add_handler(registration)
+    # Important: Add admin_flow FIRST so it takes priority over registration!
     application.add_handler(admin_flow)
+    application.add_handler(registration)
     application.add_handler(CommandHandler("menu", start))
     application.add_handler(CallbackQueryHandler(handle_menu_callback, pattern=r"^menu:"))
     application.add_handler(CommandHandler("subscribe", subscribe))
