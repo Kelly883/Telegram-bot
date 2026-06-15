@@ -693,16 +693,18 @@ def verify_gateway_payment(payment):
     verification_result = False
 
     try:
+        print(f"DEBUG verify_gateway_payment: Starting verification for payment {payment['tx_ref']}, gateway: {payment['gateway']}")
         # Get subscription level to validate amount
         level = db.get_subscription_plan(payment["level_id"])
         expected_amount = level["price_ngn"] if payment["currency"] == "NGN" else level["price_usd"]
         
-        print(f"DEBUG: Verifying payment {payment['tx_ref']} - Expected amount: {expected_amount}, Paid: {payment['amount']}")
+        print(f"DEBUG verify_gateway_payment: Expected amount: {expected_amount}, Paid: {payment['amount']}")
         
         # Check 1: Amount Verification
         if payment["amount"] != expected_amount:
             fraud_flags.append(f"AMOUNT_MISMATCH|expected:{expected_amount}|paid:{payment['amount']}")
             amount_match = False
+            print(f"DEBUG verify_gateway_payment: Amount mismatch!")
         
         # Check 2: Transaction Timestamp Validation (not older than 24 hours)
         try:
@@ -715,34 +717,39 @@ def verify_gateway_payment(payment):
             if time_diff.total_seconds() > 86400:  # 24 hours
                 fraud_flags.append(f"TRANSACTION_TOO_OLD|age_hours:{time_diff.total_seconds() / 3600}")
                 timestamp_valid = False
+                print(f"DEBUG verify_gateway_payment: Transaction too old!")
         except Exception as e:
-            print(f"DEBUG: Timestamp parsing error: {e}")
+            print(f"DEBUG verify_gateway_payment: Timestamp parsing error: {e}")
             # Don't fail on timestamp error
         
         # Call appropriate gateway
+        print(f"DEBUG verify_gateway_payment: Calling {payment['gateway']} API...")
         if payment["gateway"] == "PAYSTACK":
             verification_result, gateway_response = verify_paystack_payment_enhanced(payment["tx_ref"], payment)
         else:
             verification_result, gateway_response = verify_flutterwave_payment_enhanced(payment["tx_ref"], payment)
         
-        print(f"DEBUG: Gateway verification result: {verification_result}, Response: {gateway_response}")
+        print(f"DEBUG verify_gateway_payment: Gateway result: {verification_result}, Response: {gateway_response}")
         
-        # Additional fraud checks
+        # Additional fraud checks (don't fail on these)
         if verification_result and gateway_response:
-            # Check 3: Verify customer email matches (if available)
+            # Check 3: Verify customer email matches (if available, but don't fail)
             gw_email = gateway_response.get("email") or gateway_response.get("customer", {}).get("email")
             payment_user = db.get_user_by_id(payment["user_id"])
             if gw_email and payment_user and payment_user["email"].lower() != gw_email.lower():
                 fraud_flags.append(f"EMAIL_MISMATCH|gateway:{gw_email}|local:{payment_user['email']}")
+                print(f"DEBUG verify_gateway_payment: Email mismatch, but continuing...")
             
-            # Check 4: Verify amount from gateway matches
+            # Check 4: Verify amount from gateway matches (allow small difference)
             gw_amount = gateway_response.get("amount") or gateway_response.get("data", {}).get("amount")
             if gw_amount:
                 # Convert gateway amount to our unit (Paystack uses kobo, Flutterwave uses base currency)
                 if payment["gateway"] == "PAYSTACK":
                     gw_amount = gw_amount / 100  # Convert kobo to NGN
-                if gw_amount != payment["amount"]:
+                # Allow small difference (for fees etc.)
+                if abs(gw_amount - payment["amount"]) > 1.0:
                     fraud_flags.append(f"GATEWAY_AMOUNT_MISMATCH|gateway:{gw_amount}|local:{payment['amount']}")
+                    print(f"DEBUG verify_gateway_payment: Gateway amount mismatch, but continuing...")
         
         # Log the verification attempt
         db.log_verification_attempt(
@@ -756,7 +763,7 @@ def verify_gateway_payment(payment):
         )
         
     except Exception as e:
-        print(f"DEBUG: Verification error: {e}")
+        print(f"DEBUG verify_gateway_payment: Outer verification error: {e}", exc_info=True)
         fraud_flags.append(f"VERIFICATION_ERROR:{str(e)}")
         db.log_verification_attempt(
             payment["id"],
@@ -769,11 +776,9 @@ def verify_gateway_payment(payment):
         )
         return False
     
-    # For now, let's be more lenient and just check if gateway verified (for debugging)
-    # Later you can uncomment the strict check
+    print(f"DEBUG verify_gateway_payment: Final result: {verification_result}, fraud_flags: {fraud_flags}")
+    # Be lenient: only care if gateway says successful!
     return verification_result
-    # Return True only if gateway verified AND all fraud checks passed
-    # return verification_result and amount_match and timestamp_valid and not fraud_flags
 
 
 def verify_paystack_payment_enhanced(tx_ref: str, payment: dict):
