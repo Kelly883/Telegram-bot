@@ -23,13 +23,96 @@ import config
 import db
 
 
-# Health check server to prevent Fly.io from stopping the app
+# Health check server to prevent Fly.io/Render from stopping the app
+# Also handles payment callbacks
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
         self.end_headers()
         self.wfile.write(b'OK')
+    
+    def do_POST(self):
+        if self.path == "/payment/callback":
+            content_length = int(self.headers['Content-Length'])
+            post_data = self.rfile.read(content_length)
+            
+            import json
+            try:
+                data = json.loads(post_data)
+                print(f"DEBUG: Received payment callback: {data}")
+                
+                # Determine which gateway it is
+                if 'data' in data and 'id' in data['data']:  # Paystack
+                    self._handle_paystack_callback(data)
+                elif 'status' in data and 'data' in data:  # Flutterwave
+                    self._handle_flutterwave_callback(data)
+                
+                self.send_response(200)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'Success')
+            except Exception as e:
+                print(f"DEBUG: Error handling callback: {e}")
+                self.send_response(500)
+                self.send_header('Content-type', 'text/plain')
+                self.end_headers()
+                self.wfile.write(b'Error')
+        else:
+            self.send_response(404)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Not Found')
+    
+    def _handle_paystack_callback(self, data):
+        # Verify Paystack signature (optional but recommended)
+        # For now, let's get the transaction reference and verify it
+        tx_ref = data['data'].get('reference')
+        if tx_ref:
+            payment = db.get_payment_by_ref(tx_ref)
+            if payment and payment['status'] == 'PENDING':
+                # Verify with Paystack API to be sure
+                verification_result, _ = verify_paystack_payment_enhanced(tx_ref, payment)
+                if verification_result:
+                    db.update_payment_status(tx_ref, 'CONFIRMED')
+                    user = db.get_user_by_id(payment['user_id'])
+                    level = db.get_subscription_plan(payment['level_id'])
+                    expiry_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
+                    db.create_subscription(payment['user_id'], payment['level_id'], expiry_date)
+                    # Send notification to user
+                    from telegram import Bot
+                    bot = Bot(token=config.BOT_TOKEN)
+                    try:
+                        bot.send_message(
+                            chat_id=user['telegram_id'],
+                            text=f"✅ Great news! Your payment for {level['name']} has been confirmed and your subscription is now active!"
+                        )
+                    except Exception as e:
+                        print(f"Failed to send notification: {e}")
+    
+    def _handle_flutterwave_callback(self, data):
+        # Handle Flutterwave callback
+        tx_ref = data.get('data', {}).get('tx_ref')
+        if tx_ref:
+            payment = db.get_payment_by_ref(tx_ref)
+            if payment and payment['status'] == 'PENDING':
+                verification_result, _ = verify_flutterwave_payment_enhanced(tx_ref, payment)
+                if verification_result:
+                    db.update_payment_status(tx_ref, 'CONFIRMED')
+                    user = db.get_user_by_id(payment['user_id'])
+                    level = db.get_subscription_plan(payment['level_id'])
+                    expiry_date = (datetime.now(timezone.utc) + timedelta(days=30)).strftime("%Y-%m-%d")
+                    db.create_subscription(payment['user_id'], payment['level_id'], expiry_date)
+                    # Send notification to user
+                    from telegram import Bot
+                    bot = Bot(token=config.BOT_TOKEN)
+                    try:
+                        bot.send_message(
+                            chat_id=user['telegram_id'],
+                            text=f"✅ Great news! Your payment for {level['name']} has been confirmed and your subscription is now active!"
+                        )
+                    except Exception as e:
+                        print(f"Failed to send notification: {e}")
     
     def log_message(self, format, *args):
         pass  # Disable access logging
@@ -882,12 +965,14 @@ async def admin_level_description(update: Update, context: ContextTypes.DEFAULT_
     price_usd = context.user_data["admin_level_price_usd"]
     description = update.message.text.strip()
     db.create_subscription_plan(name, price_ngn, price_usd, description)
+    keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
     await update.message.reply_text(
         "✅ <b>Subscription Plan Created Successfully!</b>\n\n"
         f"💎 Plan Name: {html.escape(name)}\n"
         f"💰 NGN Price: {price_ngn}\n"
         f"💰 USD Price: {price_usd}\n"
         f"📝 Description: {html.escape(description)}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
     return ConversationHandler.END
@@ -922,11 +1007,13 @@ async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT
     level_id = context.user_data["admin_prediction_level_id"]
     db.add_prediction(level_id, title, content)
     level = db.get_subscription_plan(level_id)
+    keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
     await update.message.reply_text(
         "✅ <b>Prediction Saved Successfully!</b>\n\n"
         f"💎 Plan: {html.escape(level['name'])}\n"
         f"📌 Title: {html.escape(title)}\n"
         f"Notifying subscribers now...",
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
     notify_subscribers(level_id, title, content)
