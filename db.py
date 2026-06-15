@@ -201,24 +201,51 @@ def init_db():
             with closing(conn.cursor()) as cur:
                 for stmt in SQL_CREATE_POSTGRES:
                     cur.execute(stmt)
-                # Alter existing users table to use BIGINT for telegram_id if needed
-                try:
-                    cur.execute("ALTER TABLE users ALTER COLUMN telegram_id TYPE BIGINT")
-                    print("DEBUG init_db: Changed users.telegram_id to BIGINT")
-                except Exception as e:
-                    print(f"DEBUG init_db: Altering users.telegram_id failed (might already be done): {e}")
-                # Alter predictions.admin_user_id to BIGINT
-                try:
-                    cur.execute("ALTER TABLE predictions ALTER COLUMN admin_user_id TYPE BIGINT")
-                    print("DEBUG init_db: Changed predictions.admin_user_id to BIGINT")
-                except Exception as e:
-                    print(f"DEBUG init_db: Altering predictions.admin_user_id failed (might already be done): {e}")
-                # Alter admin_audit_log.admin_user_id to BIGINT
-                try:
-                    cur.execute("ALTER TABLE admin_audit_log ALTER COLUMN admin_user_id TYPE BIGINT")
-                    print("DEBUG init_db: Changed admin_audit_log.admin_user_id to BIGINT")
-                except Exception as e:
-                    print(f"DEBUG init_db: Altering admin_audit_log.admin_user_id failed (might already be done): {e}")
+                
+                # Check current type of users.telegram_id
+                cur.execute("""
+                    SELECT data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'users' AND column_name = 'telegram_id'
+                """)
+                col_type = cur.fetchone()
+                print(f"DEBUG init_db: users.telegram_id current type: {col_type}")
+                if col_type and col_type['data_type'] != 'bigint':
+                    try:
+                        cur.execute("ALTER TABLE users ALTER COLUMN telegram_id TYPE BIGINT")
+                        print("DEBUG init_db: Changed users.telegram_id to BIGINT")
+                    except Exception as e:
+                        print(f"DEBUG init_db: Altering users.telegram_id failed: {e}")
+                
+                # Check predictions.admin_user_id
+                cur.execute("""
+                    SELECT data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'predictions' AND column_name = 'admin_user_id'
+                """)
+                col_type = cur.fetchone()
+                print(f"DEBUG init_db: predictions.admin_user_id current type: {col_type}")
+                if col_type and col_type['data_type'] != 'bigint':
+                    try:
+                        cur.execute("ALTER TABLE predictions ALTER COLUMN admin_user_id TYPE BIGINT")
+                        print("DEBUG init_db: Changed predictions.admin_user_id to BIGINT")
+                    except Exception as e:
+                        print(f"DEBUG init_db: Altering predictions.admin_user_id failed: {e}")
+                
+                # Check admin_audit_log.admin_user_id
+                cur.execute("""
+                    SELECT data_type 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'admin_audit_log' AND column_name = 'admin_user_id'
+                """)
+                col_type = cur.fetchone()
+                print(f"DEBUG init_db: admin_audit_log.admin_user_id current type: {col_type}")
+                if col_type and col_type['data_type'] != 'bigint':
+                    try:
+                        cur.execute("ALTER TABLE admin_audit_log ALTER COLUMN admin_user_id TYPE BIGINT")
+                        print("DEBUG init_db: Changed admin_audit_log.admin_user_id to BIGINT")
+                    except Exception as e:
+                        print(f"DEBUG init_db: Altering admin_audit_log.admin_user_id failed: {e}")
             conn.commit()
         else:
             Path(DB_PATH.parent).mkdir(parents=True, exist_ok=True)
