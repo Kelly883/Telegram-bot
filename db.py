@@ -208,22 +208,29 @@ def init_db():
             conn.commit()
 
 def create_user(telegram_id: int, name: str, email: str, phone: str, country_code: str):
-    with closing(get_connection()) as conn:
-        if USE_POSTGRES:
-            with closing(conn.cursor()) as cur:
-                cur.execute(
-                    "INSERT INTO users (telegram_id, name, email, phone, country_code) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (telegram_id) DO NOTHING RETURNING id",
+    print(f"DEBUG create_user: telegram_id={telegram_id}, name={repr(name)}, email={repr(email)}, phone={repr(phone)}, country_code={repr(country_code)}")
+    try:
+        with closing(get_connection()) as conn:
+            if USE_POSTGRES:
+                with closing(conn.cursor()) as cur:
+                    cur.execute(
+                        "INSERT INTO users (telegram_id, name, email, phone, country_code) VALUES (%s, %s, %s, %s, %s) ON CONFLICT (telegram_id) DO NOTHING RETURNING id",
+                        (telegram_id, name.strip(), email.strip().lower(), phone.strip(), country_code.strip()),
+                    )
+                    result = cur.fetchone()
+                    print(f"DEBUG create_user Postgres: result = {result}")
+                    conn.commit()
+            else:
+                cur = conn.execute(
+                    "INSERT OR IGNORE INTO users (telegram_id, name, email, phone, country_code) VALUES (?, ?, ?, ?, ?)",
                     (telegram_id, name.strip(), email.strip().lower(), phone.strip(), country_code.strip()),
                 )
-                result = cur.fetchone()
+                print(f"DEBUG create_user SQLite: lastrowid = {cur.lastrowid}")
                 conn.commit()
-        else:
-            cur = conn.execute(
-                "INSERT OR IGNORE INTO users (telegram_id, name, email, phone, country_code) VALUES (?, ?, ?, ?, ?)",
-                (telegram_id, name.strip(), email.strip().lower(), phone.strip(), country_code.strip()),
-            )
-            conn.commit()
-    return get_user_by_telegram_id(telegram_id)
+        return get_user_by_telegram_id(telegram_id)
+    except Exception as e:
+        print(f"ERROR create_user: {e}", exc_info=True)
+        raise
 
 def get_user_by_telegram_id(telegram_id: int):
     with closing(get_connection()) as conn:
