@@ -786,7 +786,10 @@ def verify_paystack_payment_enhanced(tx_ref: str, payment: dict):
     try:
         url = f"https://api.paystack.co/transaction/verify/{tx_ref}"
         headers = {"Authorization": f"Bearer {config.PAYSTACK_SECRET_KEY}"}
+        print(f"DEBUG: Calling Paystack API: {url}")
         response = requests.get(url, headers=headers, timeout=10)  # Increased timeout
+        print(f"DEBUG: Paystack response status code: {response.status_code}")
+        print(f"DEBUG: Paystack response text: {response.text}")
         data = response.json()
         
         print(f"DEBUG: Paystack response for {tx_ref}: {data}")
@@ -800,7 +803,7 @@ def verify_paystack_payment_enhanced(tx_ref: str, payment: dict):
         print(f"DEBUG: Paystack tx status: {tx_data.get('status')}, is_successful: {is_successful}")
         return is_successful, tx_data
     except Exception as e:
-        print(f"DEBUG: Paystack error: {e}")
+        print(f"DEBUG: Paystack error: {e}", exc_info=True)
         return False, {"error": str(e)}
 
 
@@ -809,7 +812,10 @@ def verify_flutterwave_payment_enhanced(tx_ref: str, payment: dict):
     try:
         url = f"https://api.flutterwave.com/v3/transactions/verify_by_tx_ref?tx_ref={tx_ref}"
         headers = {"Authorization": f"Bearer {config.FLUTTERWAVE_SECRET_KEY}"}
+        print(f"DEBUG: Calling Flutterwave API: {url}")
         response = requests.get(url, headers=headers, timeout=10)  # Increased timeout
+        print(f"DEBUG: Flutterwave response status code: {response.status_code}")
+        print(f"DEBUG: Flutterwave response text: {response.text}")
         data = response.json()
         
         print(f"DEBUG: Flutterwave response for {tx_ref}: {data}")
@@ -826,7 +832,7 @@ def verify_flutterwave_payment_enhanced(tx_ref: str, payment: dict):
         print(f"DEBUG: Flutterwave tx status: {tx_data.get('status')}, is_successful: {is_successful}")
         return is_successful, tx_data
     except Exception as e:
-        print(f"DEBUG: Flutterwave error: {e}")
+        print(f"DEBUG: Flutterwave error: {e}", exc_info=True)
         return False, {"error": str(e)}
 
 
