@@ -2,6 +2,7 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 import os
+import traceback
 from config import USE_POSTGRES, DATABASE_URL, DB_PATH
 
 if USE_POSTGRES:
@@ -229,7 +230,8 @@ def create_user(telegram_id: int, name: str, email: str, phone: str, country_cod
                 conn.commit()
         return get_user_by_telegram_id(telegram_id)
     except Exception as e:
-        print(f"ERROR create_user: {e}", exc_info=True)
+        print(f"ERROR create_user: {e}")
+        traceback.print_exc()
         raise
 
 def get_user_by_telegram_id(telegram_id: int):

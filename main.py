@@ -3,6 +3,7 @@ import html
 import re
 import threading
 import time
+import traceback
 import uuid
 from datetime import datetime, timedelta, timezone
 from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -413,7 +414,8 @@ async def register_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Great! Please send your email address.")
         return REG_EMAIL
     except Exception as e:
-        print(f"ERROR register_name: {e}", exc_info=True)
+        print(f"ERROR register_name: {e}")
+        traceback.print_exc()
         await update.message.reply_text(f"⚠️ Error: {e}")
         return REG_NAME
 
@@ -431,7 +433,8 @@ async def register_email(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return REG_PHONE
     except Exception as e:
-        print(f"ERROR register_email: {e}", exc_info=True)
+        print(f"ERROR register_email: {e}")
+        traceback.print_exc()
         await update.message.reply_text(f"⚠️ Error: {e}")
         return REG_EMAIL
 
@@ -464,7 +467,8 @@ async def register_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return ConversationHandler.END
     except Exception as e:
-        print(f"ERROR register_phone: {e}", exc_info=True)
+        print(f"ERROR register_phone: {e}")
+        traceback.print_exc()
         await update.message.reply_text(
             f"⚠️ An error occurred: {e}"
         )
