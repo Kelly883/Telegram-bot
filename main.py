@@ -134,10 +134,15 @@ def start_health_server():
     ADMIN_LEVEL_PRICE_NGN,
     ADMIN_LEVEL_PRICE_USD,
     ADMIN_LEVEL_DESCRIPTION,
+    ADMIN_PREDICTION_GAME_ID,
+    ADMIN_PREDICTION_GAME_DATE,
+    ADMIN_PREDICTION_TEAMS,
+    ADMIN_PREDICTION_TITLE,
     ADMIN_PREDICTION_CONTENT,
+    ADMIN_UPLOAD_CSV,
     PAYMENT_VERIFY,
     MAIN_MENU,
-) = range(11)
+) = range(14)
 
 PHONE_PATTERN = re.compile(r"^\+[1-9][0-9]{7,14}$")
 
@@ -219,7 +224,7 @@ def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
     """Create admin menu keyboard"""
     keyboard = [
         [InlineKeyboardButton("💎 Create Subscription Plan", callback_data="admin:create_plan")],
-        [InlineKeyboardButton("📤 Upload Prediction", callback_data="admin:upload_prediction")],
+        [InlineKeyboardButton("📊 Manage Predictions", callback_data="admin:manage_predictions")],
         [InlineKeyboardButton("👥 View All Users", callback_data="admin:view_users")],
         [InlineKeyboardButton("📥 Download Users CSV", callback_data="admin:download_users")],
     ]
@@ -840,7 +845,67 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         return ADMIN_LEVEL_NAME
-    if action == "upload_prediction" or action == "add_pred":
+    if action == "manage_predictions":
+        keyboard = [
+            [InlineKeyboardButton("📋 View All Predictions", callback_data="admin:view_predictions")],
+            [InlineKeyboardButton("➕ Add Single Prediction", callback_data="admin:add_single_prediction")],
+            [InlineKeyboardButton("📥 Upload Predictions CSV", callback_data="admin:upload_csv")],
+            [InlineKeyboardButton("📄 Download CSV Template", callback_data="admin:download_csv_template")],
+            [InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")],
+        ]
+        await query.edit_message_text(
+            "📊 <b>Manage Predictions</b>\n\n"
+            "Use the options below to manage your game predictions.",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        return ConversationHandler.END
+    if action == "view_predictions":
+        predictions = db.list_predictions()
+        keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
+        if predictions:
+            lines = []
+            for idx, pred in enumerate(predictions, start=1):
+                level = db.get_subscription_plan(pred['level_id'])
+                line = (
+                    f"📊 <b>Prediction {idx}</b>\n"
+                    f"   🆔 Game ID: {pred['game_id'] or 'N/A'}\n"
+                    f"   📅 Game Date: {pred['game_date'] or 'N/A'}\n"
+                    f"   👥 Teams: {pred['teams'] or 'N/A'}\n"
+                    f"   💎 Plan: {level['name'] if level else 'N/A'}\n"
+                    f"   📝 Title: {html.escape(pred['title'])}\n"
+                    f"   👤 Admin: {pred['admin_name'] or 'N/A'}\n"
+                    f"   🕐 Uploaded: {pred['created_at']}\n"
+                )
+                lines.append(line)
+            message = "📊 <b>All Predictions</b>\n\n" + "\n".join(lines)
+        else:
+            message = "📊 <b>All Predictions</b>\n\nNo predictions yet!"
+        await query.edit_message_text(message, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML")
+        return ConversationHandler.END
+    if action == "download_csv_template":
+        import csv
+        template_path = "predictions_template.csv"
+        with open(template_path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "level_id", "game_id", "game_date", "teams", "title", "content"
+            ])
+        with open(template_path, "rb") as f:
+            await context.bot.send_document(
+                chat_id=update.effective_chat.id,
+                document=f,
+                filename=template_path,
+                caption="✅ CSV template downloaded successfully!"
+            )
+        keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
+        await query.edit_message_text(
+            "✅ CSV template downloaded!",
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
+        )
+        return ConversationHandler.END
+    if action == "add_single_prediction" or action == "upload_prediction" or action == "add_pred":
         levels = db.list_subscription_plans()
         if not levels:
             keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
@@ -851,10 +916,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ConversationHandler.END
         keyboard = [[InlineKeyboardButton(f"💎 {level['name']}", callback_data=f"admin_level:{level['id']}")] for level in levels]
-        keyboard.append([InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")])
+        keyboard.append([InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")])
         await query.edit_message_text(
-            "📤 Upload a new prediction\n\n"
-            "Which subscription level should this prediction be for?",
+            "📤 Choose a subscription level for this prediction:",
             reply_markup=InlineKeyboardMarkup(keyboard),
             parse_mode="HTML"
         )
@@ -995,18 +1059,87 @@ async def admin_choice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["admin_prediction_level_id"] = int(level_id)
     await query.edit_message_text(
         f"📤 Uploading prediction for <b>{html.escape(level['name'])}</b>\n\n"
-        "Please send the <b>prediction content</b>:",
+        "Please send the <b>Game ID</b> (or send '-' if none):",
+        parse_mode="HTML"
+    )
+    return ADMIN_PREDICTION_GAME_ID
+
+
+async def admin_prediction_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    game_id = update.message.text.strip()
+    if game_id == "-":
+        game_id = None
+    context.user_data["admin_prediction_game_id"] = game_id
+    await update.message.reply_text(
+        "Great! Now send the <b>Game Date</b> (e.g., 2024-12-31) (or send '-' if none):",
+        parse_mode="HTML"
+    )
+    return ADMIN_PREDICTION_GAME_DATE
+
+
+async def admin_prediction_game_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    game_date = update.message.text.strip()
+    if game_date == "-":
+        game_date = None
+    context.user_data["admin_prediction_game_date"] = game_date
+    await update.message.reply_text(
+        "Perfect! Now send the <b>Teams</b> (e.g., Team A vs Team B) (or send '-' if none):",
+        parse_mode="HTML"
+    )
+    return ADMIN_PREDICTION_TEAMS
+
+
+async def admin_prediction_teams(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    teams = update.message.text.strip()
+    if teams == "-":
+        teams = None
+    context.user_data["admin_prediction_teams"] = teams
+    await update.message.reply_text(
+        "Okay, now send the <b>Prediction Title</b>:",
+        parse_mode="HTML"
+    )
+    return ADMIN_PREDICTION_TITLE
+
+
+async def admin_prediction_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    title = update.message.text.strip()
+    context.user_data["admin_prediction_title"] = title
+    await update.message.reply_text(
+        "Almost done! Now send the <b>Prediction Content</b>:",
         parse_mode="HTML"
     )
     return ADMIN_PREDICTION_CONTENT
 
+
 async def admin_prediction_content(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    title = "New Prediction"  # Default title if we skip the step
     content = update.message.text.strip()
     level_id = context.user_data["admin_prediction_level_id"]
-    db.add_prediction(level_id, title, content)
+    game_id = context.user_data.get("admin_prediction_game_id")
+    game_date = context.user_data.get("admin_prediction_game_date")
+    teams = context.user_data.get("admin_prediction_teams")
+    title = context.user_data.get("admin_prediction_title", "New Prediction")
+    
+    # Get admin user
+    admin_telegram_id = update.effective_user.id
+    admin_user = db.get_user_by_telegram_id(admin_telegram_id)
+    admin_user_id = admin_user['id'] if admin_user else None
+    
+    # Add prediction to DB
+    pred_id = db.add_prediction(
+        level_id, title, content,
+        game_id=game_id, game_date=game_date,
+        teams=teams, admin_user_id=admin_user_id
+    )
+    
+    # Log admin action
+    db.log_admin_action(
+        admin_user_id,
+        "ADD_PREDICTION",
+        f"Added prediction ID: {pred_id}, title: {title}"
+    )
+    
     level = db.get_subscription_plan(level_id)
-    keyboard = [[InlineKeyboardButton("🔙 Back to Admin Panel", callback_data="admin:back")]]
+    keyboard = [[InlineKeyboardButton("🔙 Back to Predictions Menu", callback_data="admin:manage_predictions")]]
     await update.message.reply_text(
         "✅ <b>Prediction Saved Successfully!</b>\n\n"
         f"💎 Plan: {html.escape(level['name'])}\n"
@@ -1127,6 +1260,10 @@ def main():
             ADMIN_LEVEL_PRICE_USD: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_price_usd)],
             ADMIN_LEVEL_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_level_description)],
             ADMIN_CHOICE: [CallbackQueryHandler(admin_choice, pattern=r"^admin_level:")],
+            ADMIN_PREDICTION_GAME_ID: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_game_id)],
+            ADMIN_PREDICTION_GAME_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_game_date)],
+            ADMIN_PREDICTION_TEAMS: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_teams)],
+            ADMIN_PREDICTION_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_title)],
             ADMIN_PREDICTION_CONTENT: [MessageHandler(filters.TEXT & ~filters.COMMAND, admin_prediction_content)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
