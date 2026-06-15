@@ -36,7 +36,9 @@ class HealthHandler(BaseHTTPRequestHandler):
 
 
 def start_health_server():
-    server = HTTPServer(('0.0.0.0', 8080), HealthHandler)
+    import os
+    port = int(os.environ.get("PORT", 8080))
+    server = HTTPServer(('0.0.0.0', port), HealthHandler)
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
 

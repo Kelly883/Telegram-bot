@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: telegram-bot
+    env: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "python main.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: BOT_TOKEN
+        sync: false
+      - key: ADMIN_IDS
+        sync: false
+      - key: PAYSTACK_SECRET_KEY
+        sync: false
+      - key: FLUTTERWAVE_SECRET_KEY
+        sync: false
+      - key: PAYMENT_CALLBACK_URL
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+    healthCheckPath: /
+    autoDeploy: true

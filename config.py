@@ -25,9 +25,14 @@ if DATABASE_URL:
     DB_PATH = BASE_DIR / "bot.sqlite"
 else:
     USE_POSTGRES = False
-    # On Fly.io, use /data for SQLite; locally, use project directory
+    # On Fly.io or Render, use appropriate directory for SQLite; locally, use project directory
     if os.getenv("FLY_APP_NAME"):
         DB_PATH = Path("/data") / "bot.sqlite"
+    elif os.getenv("RENDER"):
+        # On Render, use /opt/render/project/data for persistent storage (you'll need to add a disk)
+        DB_PATH = Path("/opt/render/project/data") / "bot.sqlite"
+        # Ensure directory exists
+        DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     else:
         DB_PATH = BASE_DIR / "bot.sqlite"
 
